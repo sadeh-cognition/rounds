@@ -1,0 +1,35 @@
+[project]
+name = "rounds"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "arize-phoenix>=14.14.0",
+    "django>=6.0.4",
+    "django-click>=2.5.0",
+    "django-ninja>=1.6.2",
+    "litellm>=1.83.14",
+    "openinference-instrumentation-smolagents>=0.1.26",
+    "opentelemetry-sdk>=1.40.0",
+    "psycopg[binary]>=3.3.3",
+    "requests>=2.33.1",
+    "rich>=15.0.0",
+    "slack-bolt>=1.28.0",
+    "slack-sdk>=3.41.0",
+    "smolagents>=1.22.0",
+    "sqlglot>=30.6.0",
+]
+
+[dependency-groups]
+dev = [
+    "django-stubs>=6.0.3",
+    "model-bakery>=1.23.4",
+    "pytest>=9.0.3",
+    "pytest-django>=4.12.0",
+]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings"
+python_files = ["tests.py", "test_*.py", "*_tests.py"]
+testpaths = ["tests", "analytics", "slack_assistant"]
