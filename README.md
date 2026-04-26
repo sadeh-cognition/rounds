@@ -137,11 +137,11 @@ Key decisions locked:
 
 - Create a Django project with:
   - django-ninja API, served on port 8001.
-  - Django models for Slack conversations, turns, pending clarifications, generated SQL, result metadata, and trace IDs.
+  - Django models for Slack conversations, turns, pending clarifications, generated SQL, result metadata
   - Unmanaged models or SQLAlchemy/introspection helpers for the existing apps and daily_metrics tables; do not modify provided seed tables.
 - Add POST /api/analytics/chat:
   - Request includes Slack team/channel/thread/user IDs, user text, UTC timestamp, and SQL visibility preference.
-  - Response includes message text, optional table rows, optional CSV/SQL snippet payloads, assumptions/clarifications, and trace metadata.
+  - Response includes message text, optional table rows, optional CSV/SQL snippet payloads, assumptions/clarifications
 - Add a Slack management command:
   - uv run manage.py run_slack_assistant
   - Uses Bolt Assistant middleware + Socket Mode.
@@ -181,7 +181,7 @@ Key decisions locked:
 - SQL failure flow:
   - Validate before execution.
   - If validation/execution fails, retry up to ANALYTICS_SQL_REPAIR_RETRIES.
-  - If still failing, return a concise explanation without exposing raw stack traces.
+  - If still failing, return a concise explanation
 
 ## Test Plan
 
@@ -228,43 +228,47 @@ Here is an ordered feature list extracted from the plan.
 - Store Django metadata tables in the same Postgres database.
 - Support a read-only analytics DB URL/role via env, while allowing local dev with provided credentials.
 
-1. Analytics Schema Access
-      - Represent apps and daily_metrics as unmanaged Django models or SQL/introspection helpers.
-      - Expose schema context to the agent:
-          - table names
-          - columns
-          - column meanings
-          - allowed relationships
-          - UTC date rule
-          - result row limits
-2. Conversation Persistence
-      - Add Django models for:
-          - Slack conversation/thread identity
-          - user turns
-          - assistant turns
-          - pending clarifications
-          - generated SQL
-          - result metadata
-          - trace IDs
-      - Persist context per Slack thread for follow-up questions.
-3. Backend Chat API
-      - Add POST /api/analytics/chat using django-ninja.
-      - Request includes:
-          - Slack team ID
-          - channel ID
-          - thread ID
-          - user ID
-          - user message text
-          - UTC timestamp
-          - SQL visibility preference
-      - Response includes:
-          - Slack-ready text
-          - optional table rows
-          - optional CSV snippet payload
-          - optional SQL snippet payload
-          - assumptions or clarification state
-          - trace metadata
-4. LLM Configuration
+### Analytics Schema Access
+
+- Represent apps and daily_metrics as unmanaged Django models or SQL/introspection helpers.
+- Expose schema context to the agent:
+  - table names
+  - columns
+  - column meanings
+  - allowed relationships
+  - UTC date rule
+  - result row limits
+
+### Conversation Persistence
+
+- Add Django models for:
+  - Slack conversation/thread identity
+  - user turns
+  - assistant turns
+  - pending clarifications
+  - generated SQL
+  - result metadata
+- Persist context per Slack thread for follow-up questions.
+
+### Backend Chat API
+
+- Add POST /api/analytics/chat using django-ninja.
+- Request includes:
+  - Slack team ID
+  - channel ID
+  - thread ID
+  - user ID
+  - user message text
+  - UTC timestamp
+  - SQL visibility preference
+- Response includes:
+  - Slack-ready text
+  - optional table rows
+  - optional CSV snippet payload
+  - optional SQL snippet payload
+  - assumptions or clarification state
+
+1. LLM Configuration
       - Use smolagents with LiteLLMModel.
       - Require model/provider configuration from env.
       - No hard-coded default provider.
@@ -272,7 +276,7 @@ Here is an ordered feature list extracted from the plan.
           - LITELLM_MODEL
           - provider API keys
           - ANALYTICS_SQL_REPAIR_RETRIES
-5. Agent Core
+2. Agent Core
       - Use ToolCallingAgent.
       - Add agent tools:
           - get_schema_context
@@ -284,7 +288,7 @@ Here is an ordered feature list extracted from the plan.
           - follow-up context
           - result interpretation
           - clarification decisions
-6. Ambiguity Handling
+3. Ambiguity Handling
       - Ask free-text clarification before answering ambiguous business terms.
       - Ambiguous examples include:
           - “revenue”
@@ -292,14 +296,14 @@ Here is an ordered feature list extracted from the plan.
           - “biggest change”
       - Store pending clarification state.
       - Resolve the pending turn from the user’s next reply.
-7. UTC Date Handling
+4. UTC Date Handling
       - Interpret relative dates using UTC calendar dates.
       - Examples:
           - “yesterday”
           - “last month”
           - “Jan 2025”
       - Do not switch to data-relative dates.
-8. SQL Safety And Validation
+5. SQL Safety And Validation
 
 - Validate generated SQL before execution.
 - Allow only read-only SELECT and CTE queries.
@@ -335,7 +339,6 @@ Here is an ordered feature list extracted from the plan.
 - Retry failed SQL generation/execution up to configurable ANALYTICS_SQL_REPAIR_RETRIES.
 - Retry covers validation or execution failures.
 - After retries are exhausted, return a concise user-facing failure.
-- Do not expose raw stack traces in Slack.
 
   1. Result Formatting
 

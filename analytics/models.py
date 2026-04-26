@@ -128,5 +128,3 @@ class AnalyticsResultMetadata(models.Model):
 
     def __str__(self) -> str:
         return f"{self.returned_row_count}/{self.row_count} rows"
-
-# Create your models here.
