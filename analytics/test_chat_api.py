@@ -62,9 +62,9 @@ def test_chat_api_does_not_heuristically_clarify_popularity() -> None:
 
 @pytest.mark.django_db
 def test_chat_api_records_sql_visibility_preference_without_generating_sql(
-    settings,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    settings.LITELLM_MODEL = ""
+    monkeypatch.delenv("LITELLM_MODEL", raising=False)
 
     response = client.post(
         "/analytics/chat",

@@ -291,19 +291,21 @@ Here is an ordered feature list extracted from the plan.
   - provider API keys
   - ANALYTICS_SQL_REPAIR_RETRIES
 
-1. Agent Core
-      - Use ToolCallingAgent.
-      - Add agent tools:
-          - get_schema_context
-          - run_readonly_sql
-          - format_result_contract
-      - Agent handles:
-          - natural language interpretation
-          - SQL generation
-          - follow-up context
-          - result interpretation
-          - clarification decisions
-2. Ambiguity Handling
+### Agent Core
+
+- Use ToolCallingAgent.
+- Add agent tools:
+  - get_schema_context
+  - run_readonly_sql
+  - format_result_contract
+- Agent handles:
+  - natural language interpretation
+  - SQL generation
+  - follow-up context
+  - result interpretation
+  - clarification decisions
+
+1. Ambiguity Handling
       - Ask free-text clarification before answering ambiguous business terms.
       - Ambiguous examples include:
           - “revenue”
@@ -311,14 +313,14 @@ Here is an ordered feature list extracted from the plan.
           - “biggest change”
       - Store pending clarification state.
       - Resolve the pending turn from the user’s next reply.
-3. UTC Date Handling
+2. UTC Date Handling
       - Interpret relative dates using UTC calendar dates.
       - Examples:
           - “yesterday”
           - “last month”
           - “Jan 2025”
       - Do not switch to data-relative dates.
-4. SQL Safety And Validation
+3. SQL Safety And Validation
 
 - Validate generated SQL before execution.
 - Allow only read-only SELECT and CTE queries.

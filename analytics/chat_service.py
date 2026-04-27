@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from django.conf import settings
 from django.db import transaction
 
 from analytics.chat_schemas import (
     AnalyticsChatRequest,
     AnalyticsChatResponse,
 )
+from analytics.llm import AnalyticsLLMConfigurationError, get_analytics_llm_config
 from slack_assistant.persistence import (
     clear_pending_clarification,
     get_or_create_conversation,
@@ -57,10 +57,12 @@ def handle_analytics_chat(payload: AnalyticsChatRequest) -> AnalyticsChatRespons
 def build_agent_not_configured_response(
     payload: AnalyticsChatRequest,
 ) -> AnalyticsChatResponse:
-    if not getattr(settings, "LITELLM_MODEL", ""):
+    try:
+        get_analytics_llm_config()
+    except AnalyticsLLMConfigurationError as exc:
         message = (
             "I saved this Slack thread turn, but SQL generation is not available yet "
-            "because LITELLM_MODEL is not configured for the analytics agent."
+            f"because {exc}"
         )
     else:
         message = (
