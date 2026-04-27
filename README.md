@@ -19,10 +19,12 @@ uv run pytest
 ```
 
 If another local Postgres is already using port 5432, start the project database
-on a different host port and use the same port for pytest:
+on a different host port and use the same port for Django commands:
 
 ```bash
 POSTGRES_PORT=55432 docker compose up -d db
+POSTGRES_PORT=55432 uv run manage.py migrate
+POSTGRES_PORT=55432 uv run manage.py runserver 8001
 POSTGRES_PORT=55432 uv run pytest
 ```
 
@@ -47,7 +49,8 @@ uv run python -m phoenix.server.main serve
 Run the Slack Socket Mode assistant process:
 
 ```bash
-uv run manage.py run_slack_assistant
+cd first-bolt-app
+slack run
 ```
 
 # Objective
@@ -278,15 +281,17 @@ Here is an ordered feature list extracted from the plan.
   - optional SQL snippet payload
   - assumptions or clarification state
 
-1. LLM Configuration
-      - Use smolagents with LiteLLMModel.
-      - Require model/provider configuration from env.
-      - No hard-coded default provider.
-      - Support env vars such as:
-          - LITELLM_MODEL
-          - provider API keys
-          - ANALYTICS_SQL_REPAIR_RETRIES
-2. Agent Core
+### LLM Configuration
+
+- Use smolagents with LiteLLMModel.
+- Require model/provider configuration from env.
+- No hard-coded default provider.
+- Support env vars such as:
+  - LITELLM_MODEL
+  - provider API keys
+  - ANALYTICS_SQL_REPAIR_RETRIES
+
+1. Agent Core
       - Use ToolCallingAgent.
       - Add agent tools:
           - get_schema_context
@@ -298,7 +303,7 @@ Here is an ordered feature list extracted from the plan.
           - follow-up context
           - result interpretation
           - clarification decisions
-3. Ambiguity Handling
+2. Ambiguity Handling
       - Ask free-text clarification before answering ambiguous business terms.
       - Ambiguous examples include:
           - “revenue”
@@ -306,14 +311,14 @@ Here is an ordered feature list extracted from the plan.
           - “biggest change”
       - Store pending clarification state.
       - Resolve the pending turn from the user’s next reply.
-4. UTC Date Handling
+3. UTC Date Handling
       - Interpret relative dates using UTC calendar dates.
       - Examples:
           - “yesterday”
           - “last month”
           - “Jan 2025”
       - Do not switch to data-relative dates.
-5. SQL Safety And Validation
+4. SQL Safety And Validation
 
 - Validate generated SQL before execution.
 - Allow only read-only SELECT and CTE queries.

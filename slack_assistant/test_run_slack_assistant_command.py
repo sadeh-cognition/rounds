@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 from datetime import timezone
+from pathlib import Path
 from typing import Any
 
 from analytics.chat_schemas import AnalyticsChatResponse, AnalyticsSnippetPayload
@@ -110,3 +112,22 @@ def test_post_chat_response_posts_message_and_uploads_snippets() -> None:
     ]
     assert [upload["snippet_type"] for upload in client.uploads] == ["csv", "sql"]
     assert [upload["filename"] for upload in client.uploads] == ["results.csv", "query.sql"]
+
+
+def test_first_bolt_app_manifest_supports_assistant_command() -> None:
+    manifest_path = Path(__file__).resolve().parents[1] / "first-bolt-app" / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+
+    assert "assistant_view" in manifest["features"]
+    assert set(manifest["oauth_config"]["scopes"]["bot"]) >= {
+        "assistant:write",
+        "chat:write",
+        "files:write",
+        "im:history",
+    }
+    assert set(manifest["settings"]["event_subscriptions"]["bot_events"]) >= {
+        "assistant_thread_started",
+        "assistant_thread_context_changed",
+        "message.im",
+    }
+    assert manifest["settings"]["socket_mode_enabled"] is True

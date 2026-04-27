@@ -98,7 +98,8 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
-DATABASE_URL = os.environ.get("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/analytics")
+postgres_port = os.environ.get("POSTGRES_PORT", "5432")
+DATABASE_URL = os.environ.get("DATABASE_URL", f"postgres://postgres:postgres@localhost:{postgres_port}/analytics")
 
 DATABASES = {
     "default": database_from_url(DATABASE_URL),
