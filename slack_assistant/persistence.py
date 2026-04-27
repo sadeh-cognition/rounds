@@ -194,7 +194,9 @@ def get_thread_context(
     pending_clarification = _serialize_pending_clarification(conversation)
     serialized_turns = [_serialize_turn(turn) for turn in ordered_turns]
 
-    user_turns = [turn for turn in serialized_turns if turn["role"] == SlackTurn.Role.USER]
+    user_turns = [
+        turn for turn in serialized_turns if turn["role"] == SlackTurn.Role.USER
+    ]
     assistant_turns = [
         turn for turn in serialized_turns if turn["role"] == SlackTurn.Role.ASSISTANT
     ]
@@ -208,7 +210,9 @@ def get_thread_context(
         "pending_clarification": pending_clarification,
         "turns": serialized_turns,
         "last_user_question": user_turns[-1]["text"] if user_turns else "",
-        "last_assistant_response": assistant_turns[-1]["text"] if assistant_turns else "",
+        "last_assistant_response": assistant_turns[-1]["text"]
+        if assistant_turns
+        else "",
     }
 
 
@@ -238,8 +242,11 @@ def _serialize_turn(turn: SlackTurn) -> dict[str, Any]:
         for sql in turn.generated_sql.all()
     ]
     result_metadata = None
-    if hasattr(turn, "result_metadata"):
+    try:
         metadata = turn.result_metadata
+    except AnalyticsResultMetadata.DoesNotExist:
+        metadata = None
+    if metadata is not None:
         result_metadata = {
             "row_count": metadata.row_count,
             "returned_row_count": metadata.returned_row_count,

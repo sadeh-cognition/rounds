@@ -93,19 +93,15 @@ Key decisions locked:
 - References used: smolagents telemetry/Phoenix guide, smolagents Text-to-SQL example, smolagents LiteLLMModel docs, Slack Bolt Assistant
   middleware, Slack Socket Mode docs, Slack snippets docs.
 
-## List of Features
-
-Here is an ordered feature list extracted from the plan.
-
-### Next Feature to Implement
+# Next Feature to Implement
 Implement this feature in order to create Slack Analytics Assistant:
-Conversation Persistence
-- Add Django models for:
-  - Slack conversation/thread identity
-  - user turns
-  - assistant turns
-  - pending clarifications
-  - generated SQL
-  - result metadata
-- Persist context per Slack thread for follow-up questions.
+Slack Assistant Integration
+- Add Django management command:
+  - uv run manage.py run_slack_assistant
+- Use Bolt for Python.
+- Use Slack AI Assistant middleware.
+- Use Socket Mode.
+- Support Assistant threads only.
+- Send Slack user messages to the backend HTTP API.
+- Post backend responses back to Slack.
 

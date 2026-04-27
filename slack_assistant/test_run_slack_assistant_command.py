@@ -1,0 +1,112 @@
+from __future__ import annotations
+
+from datetime import timezone
+from typing import Any
+
+from analytics.chat_schemas import AnalyticsChatResponse, AnalyticsSnippetPayload
+from slack_assistant.management.commands.run_slack_assistant import (
+    build_chat_request,
+    infer_sql_visibility_preference,
+    post_chat_response,
+    render_slack_message,
+)
+
+
+class FakeSlackClient:
+    def __init__(self) -> None:
+        self.messages: list[dict[str, Any]] = []
+        self.uploads: list[dict[str, Any]] = []
+
+    def chat_postMessage(self, **kwargs: Any) -> None:
+        self.messages.append(kwargs)
+
+    def files_upload_v2(self, **kwargs: Any) -> None:
+        self.uploads.append(kwargs)
+
+
+def test_build_chat_request_uses_assistant_thread_identity_and_utc_timestamp() -> None:
+    payload = build_chat_request(
+        body={"team_id": "T123"},
+        event={
+            "channel": "C123",
+            "thread_ts": "1710000000.000001",
+            "ts": "1710000001.000002",
+            "user": "U123",
+            "text": "  how many apps do we have?  ",
+        },
+    )
+
+    assert payload.slack_team_id == "T123"
+    assert payload.slack_channel_id == "C123"
+    assert payload.slack_thread_id == "1710000000.000001"
+    assert payload.slack_user_id == "U123"
+    assert payload.text == "how many apps do we have?"
+    assert payload.utc_timestamp.tzinfo == timezone.utc
+    assert payload.sql_visibility_preference == "auto"
+
+
+def test_infer_sql_visibility_preference_from_user_text() -> None:
+    assert infer_sql_visibility_preference("Show me the SQL for this answer") == "requested"
+    assert infer_sql_visibility_preference("Answer this without SQL") == "never"
+    assert infer_sql_visibility_preference("How many apps do we have?") == "auto"
+
+
+def test_render_slack_message_includes_table_assumptions_and_truncation() -> None:
+    response = AnalyticsChatResponse(
+        message_text="Top countries by installs:",
+        table_columns=["country", "installs"],
+        table_rows=[
+            {"country": "US", "installs": 120},
+            {"country": "DE", "installs": 45},
+        ],
+        assumptions=["Dates are interpreted as UTC calendar dates."],
+        row_count=500,
+        returned_row_count=25,
+        truncated=True,
+    )
+
+    text = render_slack_message(response)
+
+    assert "Top countries by installs:" in text
+    assert "country | installs" in text
+    assert "US      | 120" in text
+    assert "*Assumptions*" in text
+    assert "Showing 25 of 500 returned rows." in text
+
+
+def test_post_chat_response_posts_message_and_uploads_snippets() -> None:
+    client = FakeSlackClient()
+    response = AnalyticsChatResponse(
+        message_text="Query failed once, here is the SQL.",
+        csv_snippet=AnalyticsSnippetPayload(
+            filename="results.csv",
+            content="country,installs\nUS,120\n",
+            title="Results",
+            mime_type="text/csv",
+        ),
+        sql_snippet=AnalyticsSnippetPayload(
+            filename="query.sql",
+            content="select * from apps;",
+            title="Generated SQL",
+            mime_type="application/sql",
+        ),
+    )
+
+    post_chat_response(
+        client=client,  # type: ignore[arg-type]
+        channel_id="C123",
+        thread_ts="1710000000.000001",
+        response=response,
+    )
+
+    assert client.messages == [
+        {
+            "channel": "C123",
+            "thread_ts": "1710000000.000001",
+            "text": "Query failed once, here is the SQL.",
+            "unfurl_links": False,
+            "unfurl_media": False,
+        }
+    ]
+    assert [upload["snippet_type"] for upload in client.uploads] == ["csv", "sql"]
+    assert [upload["filename"] for upload in client.uploads] == ["results.csv", "query.sql"]

@@ -1,7 +1,3 @@
-I want to have a thorough discussion with you about a new tool.
-Ask as many questions as you need until you understand how to fully design and implement these features.
-Once you understand everything and have no more questions give me a design proposal and an implementation plan.
-
 ## Development
 
 Install and sync dependencies:
@@ -14,6 +10,20 @@ Start the provided Postgres database:
 
 ```bash
 docker compose up -d db
+```
+
+Run tests against the local Postgres database:
+
+```bash
+uv run pytest
+```
+
+If another local Postgres is already using port 5432, start the project database
+on a different host port and use the same port for pytest:
+
+```bash
+POSTGRES_PORT=55432 docker compose up -d db
+POSTGRES_PORT=55432 uv run pytest
 ```
 
 Run Django migrations for assistant metadata tables:
@@ -348,7 +358,7 @@ Here is an ordered feature list extracted from the plan.
 - Include SQL as .sql snippet only when requested or useful after failure.
 - Include assumptions/clarification notes where applicable.
 
-  1. Slack Assistant Integration
+### Slack Assistant Integration
 
 - Add Django management command:
   - uv run manage.py run_slack_assistant

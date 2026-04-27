@@ -1,4 +1,8 @@
+from typing import TYPE_CHECKING
 from django.db import models
+
+if TYPE_CHECKING:
+    from django.db.models.manager import RelatedManager
 
 
 class AnalyticsApp(models.Model):
@@ -22,6 +26,8 @@ class DailyMetric(models.Model):
         on_delete=models.DO_NOTHING,
         related_name="daily_metrics",
     )
+    if TYPE_CHECKING:
+        app_id: str
     date = models.DateField()
     country = models.CharField(max_length=2)
     installs = models.BigIntegerField()
@@ -43,6 +49,10 @@ class SlackConversation(models.Model):
     thread_ts = models.CharField(max_length=64)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    if TYPE_CHECKING:
+        turns: RelatedManager["SlackTurn"]
+        pending_clarification: "PendingClarification"
 
     class Meta:
         constraints = [
@@ -72,6 +82,10 @@ class SlackTurn(models.Model):
     text = models.TextField()
     metadata = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    if TYPE_CHECKING:
+        generated_sql: RelatedManager["GeneratedSQL"]
+        result_metadata: "AnalyticsResultMetadata"
 
     class Meta:
         indexes = [
