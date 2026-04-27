@@ -118,18 +118,6 @@ METRIC_DEFINITIONS = {
     "roas": "(in_app_revenue + ads_revenue) / ua_cost when ua_cost is non-zero",
 }
 
-AMBIGUOUS_TERMS = {
-    "revenue": (
-        "Ask whether the user means in-app revenue, ads revenue, or total revenue "
-        "unless the phrasing already makes that explicit."
-    ),
-    "popularity": (
-        "Ask whether popularity means installs, revenue, active countries, or "
-        "another metric."
-    ),
-}
-
-
 def get_analytics_schema_context(
     conversation_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -140,7 +128,6 @@ def get_analytics_schema_context(
             asdict(relationship) for relationship in ALLOWED_RELATIONSHIPS
         ],
         "metric_definitions": METRIC_DEFINITIONS,
-        "ambiguous_terms": AMBIGUOUS_TERMS,
         "date_rule": (
             "Interpret relative dates using UTC calendar dates. Do not use local "
             "Slack user time zones unless a later feature explicitly provides one."

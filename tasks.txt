@@ -95,13 +95,8 @@ Key decisions locked:
 
 # Next Feature to Implement
 Implement this feature in order to create Slack Analytics Assistant:
-Slack Assistant Integration
-- Add Django management command:
-  - uv run manage.py run_slack_assistant
-- Use Bolt for Python.
-- Use Slack AI Assistant middleware.
-- Use Socket Mode.
-- Support Assistant threads only.
-- Send Slack user messages to the backend HTTP API.
-- Post backend responses back to Slack.
+Ambiguity Handling
+- Ask free-text clarification before answering ambiguous business terms.
+- Store pending clarification state.
+- Resolve the pending turn from the user’s next reply.
 

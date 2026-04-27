@@ -58,11 +58,10 @@ def test_schema_context_includes_column_meanings_relationships_and_utc_rule() ->
     )
 
 
-def test_schema_context_calls_out_ambiguous_business_terms() -> None:
+def test_schema_context_includes_metric_definitions_without_ambiguity_rules() -> None:
     context = get_analytics_schema_context()
 
-    assert "in-app revenue" in context["ambiguous_terms"]["revenue"]
-    assert "installs" in context["ambiguous_terms"]["popularity"]
+    assert "ambiguous_terms" not in context
     assert context["metric_definitions"]["total_revenue"] == (
         "in_app_revenue + ads_revenue"
     )

@@ -28,7 +28,11 @@ def _payload(**overrides: object) -> dict[str, object]:
 
 
 @pytest.mark.django_db
-def test_chat_api_does_not_heuristically_clarify_revenue_and_persists_turns() -> None:
+def test_chat_api_without_llm_config_does_not_make_local_ambiguity_decision(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("LITELLM_MODEL", raising=False)
+
     response = client.post(
         "/analytics/chat",
         json=_payload(text="which countries generate the most revenue?"),
@@ -45,19 +49,98 @@ def test_chat_api_does_not_heuristically_clarify_revenue_and_persists_turns() ->
         SlackTurn.Role.USER,
         SlackTurn.Role.ASSISTANT,
     ]
+    assistant_turn = conversation.turns.get(role=SlackTurn.Role.ASSISTANT)
+    assert assistant_turn.metadata["response_type"] == "agent_not_configured"
 
 
 @pytest.mark.django_db
-def test_chat_api_does_not_heuristically_clarify_popularity() -> None:
+def test_chat_api_clarification_response_is_persisted_when_model_decides(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from analytics.ambiguity import AmbiguityDecision
+
+    monkeypatch.setenv("LITELLM_MODEL", "groq/llama-3.1-8b-instant")
+    monkeypatch.setattr(
+        "analytics.chat_service.decide_ambiguity_with_llm",
+        lambda **_: AmbiguityDecision(
+            needs_clarification=True,
+            question="Which revenue definition should I use?",
+            ambiguous_term="revenue",
+            possible_interpretations=["in-app revenue", "ads revenue", "total revenue"],
+        ),
+    )
+
     response = client.post(
         "/analytics/chat",
-        json=_payload(text="List all iOS apps sorted by their popularity"),
+        json=_payload(text="which countries generate the most revenue?"),
+    )
+
+    assert response.status_code == 200
+    body = AnalyticsChatResponse.model_validate(response.json())
+    assert body.message_text == "Which revenue definition should I use?"
+    assert body.clarification is not None
+    assert body.clarification.required is True
+    assert body.clarification.context == {
+        "ambiguous_term": "revenue",
+        "possible_interpretations": [
+            "in-app revenue",
+            "ads revenue",
+            "total revenue",
+        ],
+        "original_text": "which countries generate the most revenue?",
+    }
+
+    pending = PendingClarification.objects.get()
+    assert pending.question == "Which revenue definition should I use?"
+    assert pending.context["possible_interpretations"] == [
+        "in-app revenue",
+        "ads revenue",
+        "total revenue",
+    ]
+
+
+@pytest.mark.django_db
+def test_chat_api_resolves_pending_clarification_from_next_reply() -> None:
+    conversation = SlackConversation.objects.create(
+        team_id="T123",
+        channel_id="C123",
+        thread_ts="1710000000.000001",
+    )
+    PendingClarification.objects.create(
+        conversation=conversation,
+        question="Which revenue definition should I use?",
+        context={
+            "ambiguous_term": "revenue",
+            "possible_interpretations": [
+                "in-app revenue",
+                "ads revenue",
+                "total revenue",
+            ],
+            "original_text": "which countries generate the most revenue?",
+        },
+    )
+
+    response = client.post(
+        "/analytics/chat",
+        json=_payload(
+            text="Use total revenue",
+            utc_timestamp="2026-04-27T12:01:00Z",
+        ),
     )
 
     assert response.status_code == 200
     body = AnalyticsChatResponse.model_validate(response.json())
     assert body.clarification is None
+    assert "Resolved clarification for revenue: Use total revenue" in body.assumptions
     assert PendingClarification.objects.count() == 0
+
+    assistant_turn = SlackTurn.objects.filter(role=SlackTurn.Role.ASSISTANT).latest("id")
+    assert assistant_turn.metadata["response_type"] == "pending_clarification_resolved"
+    assert assistant_turn.metadata["clarification_answer"] == "Use total revenue"
+    assert assistant_turn.metadata["resolved_question"] == (
+        "which countries generate the most revenue?\n"
+        "Clarification for revenue: Use total revenue"
+    )
 
 
 @pytest.mark.django_db

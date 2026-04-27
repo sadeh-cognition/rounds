@@ -305,22 +305,24 @@ Here is an ordered feature list extracted from the plan.
   - result interpretation
   - clarification decisions
 
-1. Ambiguity Handling
-      - Ask free-text clarification before answering ambiguous business terms.
-      - Ambiguous examples include:
-          - “revenue”
-          - “popularity”
-          - “biggest change”
-      - Store pending clarification state.
-      - Resolve the pending turn from the user’s next reply.
-2. UTC Date Handling
+### Ambiguity Handling
+
+- Ask free-text clarification before answering ambiguous business terms.
+- Ambiguous examples include:
+  - “revenue”
+  - “popularity”
+  - “biggest change”
+- Store pending clarification state.
+- Resolve the pending turn from the user’s next reply.
+
+1. UTC Date Handling
       - Interpret relative dates using UTC calendar dates.
       - Examples:
           - “yesterday”
           - “last month”
           - “Jan 2025”
       - Do not switch to data-relative dates.
-3. SQL Safety And Validation
+2. SQL Safety And Validation
 
 - Validate generated SQL before execution.
 - Allow only read-only SELECT and CTE queries.
