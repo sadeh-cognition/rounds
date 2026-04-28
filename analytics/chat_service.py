@@ -3,6 +3,8 @@ from __future__ import annotations
 from django.db import transaction
 
 from analytics.ambiguity import AmbiguityDecision, decide_ambiguity_with_llm
+from analytics.agent_tools import SQLExecutionRecord
+from analytics.agentic_qa import AgenticQAResult, answer_question_with_agent
 from analytics.chat_schemas import (
     AnalyticsClarificationPayload,
     AnalyticsChatRequest,
@@ -13,11 +15,15 @@ from analytics.llm import (
     AnalyticsLLMConfigurationError,
     get_analytics_llm_config,
 )
+from analytics.models import SlackConversation
 from slack_assistant.persistence import (
     clear_pending_clarification,
     get_or_create_conversation,
     get_thread_context,
+    record_assistant_turn,
     record_assistant_response,
+    record_generated_sql,
+    record_result_metadata,
     record_user_turn,
     upsert_pending_clarification,
 )
@@ -49,25 +55,27 @@ def handle_analytics_chat(payload: AnalyticsChatRequest) -> AnalyticsChatRespons
     pending_clarification = thread_context.get("pending_clarification")
     if pending_clarification:
         clear_pending_clarification(conversation=conversation)
-        response = build_agent_not_configured_response(
-            payload,
-            resolved_clarification=pending_clarification,
+        resolved_question = _resolve_pending_question(
+            pending_clarification=pending_clarification,
+            clarification_answer=payload.text,
         )
-        record_assistant_response(
+        return _answer_with_agent(
+            payload=payload,
             conversation=conversation,
-            text=response.message_text,
-            metadata={
+            question=resolved_question,
+            thread_context={
+                **thread_context,
+                "pending_clarification": None,
+                "resolved_clarification": pending_clarification,
+                "last_user_question": resolved_question,
+            },
+            response_metadata={
                 "response_type": "pending_clarification_resolved",
-                "sql_visibility_preference": payload.sql_visibility_preference,
                 "pending_clarification": pending_clarification,
                 "clarification_answer": payload.text,
-                "resolved_question": _resolve_pending_question(
-                    pending_clarification=pending_clarification,
-                    clarification_answer=payload.text,
-                ),
+                "resolved_question": resolved_question,
             },
         )
-        return response
 
     try:
         llm_config = get_analytics_llm_config()
@@ -126,16 +134,138 @@ def handle_analytics_chat(payload: AnalyticsChatRequest) -> AnalyticsChatRespons
         )
         return response
 
-    response = build_agent_not_configured_response(payload, config=llm_config)
-    record_assistant_response(
+    return _answer_with_agent(
+        payload=payload,
         conversation=conversation,
-        text=response.message_text,
+        question=payload.text,
+        thread_context=thread_context,
+        config=llm_config,
+        response_metadata={"response_type": "agent_answered"},
+    )
+
+
+def _answer_with_agent(
+    *,
+    payload: AnalyticsChatRequest,
+    conversation: SlackConversation,
+    question: str,
+    thread_context: dict[str, object],
+    response_metadata: dict[str, object],
+    config: AnalyticsLLMConfig | None = None,
+) -> AnalyticsChatResponse:
+    try:
+        llm_config = config or get_analytics_llm_config()
+    except AnalyticsLLMConfigurationError:
+        resolved_clarification = response_metadata.get("pending_clarification")
+        response = build_agent_not_configured_response(
+            payload,
+            resolved_clarification=resolved_clarification
+            if isinstance(resolved_clarification, dict)
+            else None,
+        )
+        record_assistant_response(
+            conversation=conversation,
+            text=response.message_text,
+            metadata={
+                **response_metadata,
+                "response_type": response_metadata.get(
+                    "response_type",
+                    "agent_not_configured",
+                ),
+                "sql_visibility_preference": payload.sql_visibility_preference,
+            },
+        )
+        return response
+
+    try:
+        result = answer_question_with_agent(
+            question=question,
+            conversation_context=thread_context,
+            sql_visibility_preference=payload.sql_visibility_preference,
+            config=llm_config,
+        )
+    except Exception as exc:
+        response = build_agent_failed_response(payload, exc)
+        record_assistant_response(
+            conversation=conversation,
+            text=response.message_text,
+            metadata={
+                **response_metadata,
+                "response_type": "agent_failed",
+                "sql_visibility_preference": payload.sql_visibility_preference,
+                "error": str(exc),
+            },
+        )
+        return response
+
+    response = result.response
+    if response.clarification is not None and response.clarification.required:
+        upsert_pending_clarification(
+            conversation=conversation,
+            question=response.clarification.question,
+            context={
+                **response.clarification.context,
+                "original_text": question,
+                "sql_visibility_preference": payload.sql_visibility_preference,
+                "utc_timestamp": payload.utc_timestamp.isoformat(),
+            },
+        )
+
+    _record_agent_result(
+        conversation=conversation,
+        result=result,
         metadata={
-            "response_type": "agent_not_implemented",
+            **response_metadata,
             "sql_visibility_preference": payload.sql_visibility_preference,
+            "execution_count": len(result.executions),
         },
     )
     return response
+
+
+@transaction.atomic
+def _record_agent_result(
+    *,
+    conversation: SlackConversation,
+    result: AgenticQAResult,
+    metadata: dict[str, object],
+) -> None:
+    response = result.response
+    turn = record_assistant_turn(
+        conversation=conversation,
+        text=response.message_text,
+        metadata={
+            **metadata,
+            "raw_agent_answer": result.raw_agent_answer,
+        },
+    )
+
+    for execution in result.executions:
+        record_generated_sql(
+            turn=turn,
+            sql=execution.sql,
+            validation_status=execution.validation_status,
+            error=execution.error,
+        )
+
+    successful_execution = _last_successful_execution(result.executions)
+    if successful_execution is not None:
+        record_result_metadata(
+            turn=turn,
+            row_count=successful_execution.row_count,
+            returned_row_count=successful_execution.returned_row_count,
+            truncated=successful_execution.truncated,
+            columns=successful_execution.columns,
+        )
+
+
+def _last_successful_execution(
+    executions: list[SQLExecutionRecord],
+) -> SQLExecutionRecord | None:
+    for execution in reversed(executions):
+        if execution.validation_status == "executed":
+            return execution
+    return None
 
 
 def build_agent_not_configured_response(
@@ -216,6 +346,23 @@ def build_ambiguity_detection_failed_response(
         message_text=(
             "I saved this Slack thread turn, but I could not check whether it needs "
             f"clarification before SQL generation: {exc}"
+        ),
+        assumptions=assumptions,
+    )
+
+
+def build_agent_failed_response(
+    payload: AnalyticsChatRequest,
+    exc: Exception,
+) -> AnalyticsChatResponse:
+    assumptions = ["Dates are interpreted as UTC calendar dates."]
+    if payload.sql_visibility_preference == "requested":
+        assumptions.append("SQL was requested")
+
+    return AnalyticsChatResponse(
+        message_text=(
+            "I saved this Slack thread turn, but the analytics SQL agent could not "
+            f"complete the answer: {exc}"
         ),
         assumptions=assumptions,
     )

@@ -6,7 +6,7 @@ from pydantic import Field, ValidationError, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from smolagents import LiteLLMModel, ToolCallingAgent
 
-from analytics.agent_tools import get_schema_context
+from analytics.agent_tools import get_schema_context, get_today_date, run_readonly_sql
 
 
 class AnalyticsLLMConfigurationError(ValueError):
@@ -87,14 +87,16 @@ def build_litellm_model(config: AnalyticsLLMConfig | None = None) -> LiteLLMMode
 
 def build_analytics_agent_runtime(
     config: AnalyticsLLMConfig | None = None,
+    instructions: str | None = None,
 ) -> AnalyticsAgentRuntime:
     """Create the ToolCallingAgent runtime for portfolio analytics questions."""
     resolved_config = config or get_analytics_llm_config()
     model = build_litellm_model(resolved_config)
     agent = ToolCallingAgent(
-        tools=[get_schema_context],
+        tools=[get_schema_context, get_today_date, run_readonly_sql],
         model=model,
         max_steps=resolved_config.sql_repair_retries + 1,
+        instructions=instructions,
     )
     return AnalyticsAgentRuntime(agent=agent, config=resolved_config)
 

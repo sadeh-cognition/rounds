@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 import pytest
 from ninja.testing import TestClient
 
+from analytics.agent_tools import SQLExecutionRecord
+from analytics.agentic_qa import AgenticQAResult
 from analytics.chat_schemas import AnalyticsChatRequest, AnalyticsChatResponse
 from analytics.models import PendingClarification, SlackConversation, SlackTurn
 from config.api import api
@@ -170,6 +172,106 @@ def test_chat_api_records_sql_visibility_preference_without_generating_sql(
         "response_type": "agent_not_configured",
         "sql_visibility_preference": "requested",
     }
+
+
+@pytest.mark.django_db
+def test_chat_api_answers_with_agent_and_persists_sql_result(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from analytics.ambiguity import AmbiguityDecision
+
+    monkeypatch.setenv("LITELLM_MODEL", "groq/llama-3.1-8b-instant")
+    monkeypatch.setattr(
+        "analytics.chat_service.decide_ambiguity_with_llm",
+        lambda **_: AmbiguityDecision(needs_clarification=False),
+    )
+
+    def answer_with_agent(**kwargs: object) -> AgenticQAResult:
+        assert kwargs["question"] == "how many apps do we have?"
+        assert kwargs["sql_visibility_preference"] == "requested"
+        return AgenticQAResult(
+            response=AnalyticsChatResponse(
+                message_text="There are 2 apps.",
+                table_columns=["app_count"],
+                table_rows=[{"app_count": 2}],
+                assumptions=["Dates are interpreted as UTC calendar dates."],
+                row_count=1,
+                returned_row_count=1,
+            ),
+            executions=[
+                SQLExecutionRecord(
+                    sql="SELECT COUNT(*) AS app_count FROM apps",
+                    validation_status="executed",
+                    error="",
+                    columns=["app_count"],
+                    rows=[{"app_count": 2}],
+                    row_count=1,
+                    returned_row_count=1,
+                    truncated=False,
+                )
+            ],
+            raw_agent_answer='{"message_text": "There are 2 apps."}',
+        )
+
+    monkeypatch.setattr("analytics.chat_service.answer_question_with_agent", answer_with_agent)
+
+    response = client.post(
+        "/analytics/chat",
+        json=_payload(sql_visibility_preference="requested"),
+    )
+
+    assert response.status_code == 200
+    body = AnalyticsChatResponse.model_validate(response.json())
+    assert body.message_text == "There are 2 apps."
+    assert body.table_rows == [{"app_count": 2}]
+
+    assistant_turn = SlackTurn.objects.get(role=SlackTurn.Role.ASSISTANT)
+    assert assistant_turn.metadata["response_type"] == "agent_answered"
+    assert assistant_turn.metadata["sql_visibility_preference"] == "requested"
+    assert assistant_turn.generated_sql.get().sql == "SELECT COUNT(*) AS app_count FROM apps"
+    assert assistant_turn.result_metadata.row_count == 1
+    assert assistant_turn.result_metadata.columns == ["app_count"]
+
+
+@pytest.mark.django_db
+def test_chat_api_stores_agent_clarification_as_pending(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from analytics.ambiguity import AmbiguityDecision
+    from analytics.chat_schemas import AnalyticsClarificationPayload
+
+    monkeypatch.setenv("LITELLM_MODEL", "groq/llama-3.1-8b-instant")
+    monkeypatch.setattr(
+        "analytics.chat_service.decide_ambiguity_with_llm",
+        lambda **_: AmbiguityDecision(needs_clarification=False),
+    )
+    monkeypatch.setattr(
+        "analytics.chat_service.answer_question_with_agent",
+        lambda **_: AgenticQAResult(
+            response=AnalyticsChatResponse(
+                message_text="Which country should I filter to?",
+                clarification=AnalyticsClarificationPayload(
+                    required=True,
+                    question="Which country should I filter to?",
+                    context={"source": "analytics_agent"},
+                ),
+            ),
+            executions=[],
+            raw_agent_answer='{"needs_clarification": true}',
+        ),
+    )
+
+    response = client.post("/analytics/chat", json=_payload(text="show installs there"))
+
+    assert response.status_code == 200
+    body = AnalyticsChatResponse.model_validate(response.json())
+    assert body.clarification is not None
+    assert body.clarification.question == "Which country should I filter to?"
+
+    pending = PendingClarification.objects.get()
+    assert pending.question == "Which country should I filter to?"
+    assert pending.context["source"] == "analytics_agent"
+    assert pending.context["original_text"] == "show installs there"
 
 
 @pytest.mark.django_db

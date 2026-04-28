@@ -53,6 +53,50 @@ cd first-bolt-app
 slack run
 ```
 
+## LLM Configuration
+
+The analytics agent is configured entirely through environment variables — there is no hard-coded provider or model default.
+
+### Required
+
+| Variable | Description | Example |
+|---|---|---|
+| `LITELLM_MODEL` | LiteLLM provider/model identifier | `groq/llama-3.1-8b-instant` |
+
+The format is `<provider>/<model-name>`, exactly as [LiteLLM expects](https://docs.litellm.ai/docs/providers).
+Provider API keys are **not** managed by this setting — set them directly in the environment and LiteLLM resolves them automatically.
+
+### Optional
+
+| Variable | Default | Description |
+|---|---|---|
+| `ANALYTICS_SQL_REPAIR_RETRIES` | `2` | Number of times the agent retries a failed SQL generation/execution |
+
+### Setup
+
+1. Copy `.env.example` to `.env`.
+2. Set `LITELLM_MODEL` and the corresponding provider API key:
+
+**Groq**
+```env
+LITELLM_MODEL=groq/llama-3.1-8b-instant
+GROQ_API_KEY=gsk_...
+```
+
+**OpenAI**
+```env
+LITELLM_MODEL=openai/gpt-4o
+OPENAI_API_KEY=sk-...
+```
+
+**Anthropic**
+```env
+LITELLM_MODEL=anthropic/claude-3-5-sonnet-20241022
+ANTHROPIC_API_KEY=sk-ant-...
+```
+
+If `LITELLM_MODEL` is missing or blank the application raises an `AnalyticsLLMConfigurationError` on startup.
+
 # Objective
 
 Build a Slack chatbot for data analytics and business intelligence that can answer questions about
