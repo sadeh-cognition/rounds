@@ -57,6 +57,9 @@ Follow this workflow:
    is reached.
 - Use only the rows returned by run_readonly_sql to answer. Do not invent data
    and do not run hidden availability checks after a no-data result.
+- If user provides a clarification and there are not more ambiguities or missing details, proceed with generating SQL and answering.
+- If a date range is needed and not given by the user ask for clarification.
+- Do not make assumptions about what a reasonable default date range would be. Always ask for clarification if a date range is needed and not provided.
 
 Return the final answer as JSON with exactly these keys:
 message_text, needs_clarification, clarification_question.
