@@ -21,6 +21,7 @@ dependencies = [
   "smolagents>=1.22.0",
   "sqlglot>=30.6.0",
   "slack-cli-hooks<1.0.0",
+  "loguru>=0.7.3",
 ]
 
 [dependency-groups]

@@ -71,6 +71,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    "config.middleware.RequestResponseLoggingMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -151,6 +152,39 @@ STATIC_URL = "static/"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "plain": {
+            "format": "%(levelname)s %(name)s %(message)s",
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "plain",
+        },
+    },
+    "loggers": {
+        "config.request_response": {
+            "handlers": ["console"],
+            "level": os.environ.get("DJANGO_REQUEST_LOG_LEVEL", "INFO"),
+            "propagate": False,
+        },
+        "analytics": {
+            "handlers": ["console"],
+            "level": os.environ.get("DJANGO_BUSINESS_LOG_LEVEL", "INFO"),
+            "propagate": False,
+        },
+        "slack_assistant": {
+            "handlers": ["console"],
+            "level": os.environ.get("DJANGO_BUSINESS_LOG_LEVEL", "INFO"),
+            "propagate": False,
+        },
+    },
+}
+
 ANALYTICS_INLINE_ROW_LIMIT = int(os.environ.get("ANALYTICS_INLINE_ROW_LIMIT", "25"))
 ANALYTICS_MAX_ROW_LIMIT = int(os.environ.get("ANALYTICS_MAX_ROW_LIMIT", "500"))
 ANALYTICS_READONLY_DATABASE_URL = os.environ.get(
@@ -159,6 +193,10 @@ ANALYTICS_READONLY_DATABASE_URL = os.environ.get(
 
 SLACK_APP_TOKEN = os.environ.get("SLACK_APP_TOKEN", "")
 SLACK_BOT_TOKEN = os.environ.get("SLACK_BOT_TOKEN", "")
+SLACK_ASSISTANT_LOG_FILE = os.environ.get(
+    "SLACK_ASSISTANT_LOG_FILE",
+    str(Path.home() / ".slack" / "logs" / "slack-assistant.log"),
+)
 ANALYTICS_API_BASE_URL = os.environ.get(
     "ANALYTICS_API_BASE_URL", "http://localhost:8001"
 )

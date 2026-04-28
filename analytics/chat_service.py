@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from django.db import transaction
 
 from analytics.agent_tools import SQLExecutionRecord
@@ -26,9 +28,25 @@ from slack_assistant.persistence import (
     upsert_pending_clarification,
 )
 
+logger = logging.getLogger(__name__)
+
+
+def _model_pk(instance: object) -> object:
+    return getattr(instance, "pk", None)
+
 
 def handle_analytics_chat(payload: AnalyticsChatRequest) -> AnalyticsChatResponse:
     """Persist a Slack turn and produce the backend chat contract response."""
+    logger.info(
+        "Handling analytics chat team=%s channel=%s thread=%s user=%s text_length=%s "
+        "sql_visibility=%s",
+        payload.slack_team_id,
+        payload.slack_channel_id,
+        payload.slack_thread_id,
+        payload.slack_user_id,
+        len(payload.text),
+        payload.sql_visibility_preference,
+    )
     conversation = get_or_create_conversation(
         team_id=payload.slack_team_id,
         channel_id=payload.slack_channel_id,
@@ -43,6 +61,13 @@ def handle_analytics_chat(payload: AnalyticsChatRequest) -> AnalyticsChatRespons
             text=payload.text,
             metadata={"utc_timestamp": payload.utc_timestamp.isoformat()},
         )
+    logger.info(
+        "Recorded analytics user turn conversation_id=%s team=%s channel=%s thread=%s",
+        _model_pk(conversation),
+        payload.slack_team_id,
+        payload.slack_channel_id,
+        payload.slack_thread_id,
+    )
 
     thread_context = get_thread_context(
         team_id=payload.slack_team_id,
@@ -52,6 +77,14 @@ def handle_analytics_chat(payload: AnalyticsChatRequest) -> AnalyticsChatRespons
 
     pending_clarification = thread_context.get("pending_clarification")
     if pending_clarification:
+        logger.info(
+            "Resolving pending clarification conversation_id=%s team=%s channel=%s "
+            "thread=%s",
+            _model_pk(conversation),
+            payload.slack_team_id,
+            payload.slack_channel_id,
+            payload.slack_thread_id,
+        )
         clear_pending_clarification(conversation=conversation)
         resolved_question = _resolve_pending_question(
             pending_clarification=pending_clarification,
@@ -78,6 +111,14 @@ def handle_analytics_chat(payload: AnalyticsChatRequest) -> AnalyticsChatRespons
     try:
         llm_config = get_analytics_llm_config()
     except AnalyticsLLMConfigurationError:
+        logger.warning(
+            "Analytics LLM is not configured conversation_id=%s team=%s channel=%s "
+            "thread=%s",
+            _model_pk(conversation),
+            payload.slack_team_id,
+            payload.slack_channel_id,
+            payload.slack_thread_id,
+        )
         response = build_agent_not_configured_response(payload)
         record_assistant_response(
             conversation=conversation,
@@ -86,6 +127,11 @@ def handle_analytics_chat(payload: AnalyticsChatRequest) -> AnalyticsChatRespons
                 "response_type": "agent_not_configured",
                 "sql_visibility_preference": payload.sql_visibility_preference,
             },
+        )
+        logger.info(
+            "Returning agent-not-configured response conversation_id=%s message_length=%s",
+            _model_pk(conversation),
+            len(response.message_text),
         )
         return response
 
@@ -108,6 +154,16 @@ def _answer_with_agent(
     response_metadata: dict[str, object],
     config: AnalyticsLLMConfig | None = None,
 ) -> AnalyticsChatResponse:
+    turns = thread_context.get("turns", [])
+    context_turn_count = len(turns) if isinstance(turns, list) else 0
+    logger.info(
+        "Preparing analytics agent answer conversation_id=%s question_length=%s "
+        "context_turns=%s sql_visibility=%s",
+        _model_pk(conversation),
+        len(question),
+        context_turn_count,
+        payload.sql_visibility_preference,
+    )
     try:
         llm_config = config or get_analytics_llm_config()
     except AnalyticsLLMConfigurationError:
@@ -130,9 +186,20 @@ def _answer_with_agent(
                 "sql_visibility_preference": payload.sql_visibility_preference,
             },
         )
+        logger.warning(
+            "Analytics agent answer skipped because LLM config is missing "
+            "conversation_id=%s response_type=%s",
+            _model_pk(conversation),
+            response_metadata.get("response_type", "agent_not_configured"),
+        )
         return response
 
     try:
+        logger.info(
+            "Calling analytics SQL agent conversation_id=%s model=%s",
+            _model_pk(conversation),
+            llm_config.model_id,
+        )
         result = answer_question_with_agent(
             question=question,
             conversation_context=thread_context,
@@ -140,6 +207,11 @@ def _answer_with_agent(
             config=llm_config,
         )
     except Exception as exc:
+        logger.exception(
+            "Analytics SQL agent failed conversation_id=%s error_type=%s",
+            _model_pk(conversation),
+            type(exc).__name__,
+        )
         response = build_agent_failed_response(payload, exc)
         record_assistant_response(
             conversation=conversation,
@@ -154,7 +226,23 @@ def _answer_with_agent(
         return response
 
     response = result.response
+    logger.info(
+        "Analytics SQL agent returned conversation_id=%s message_length=%s "
+        "executions=%s row_count=%s returned_row_count=%s clarification_required=%s",
+        _model_pk(conversation),
+        len(response.message_text),
+        len(result.executions),
+        response.row_count,
+        response.returned_row_count,
+        response.clarification is not None and response.clarification.required,
+    )
     if response.clarification is not None and response.clarification.required:
+        logger.info(
+            "Persisting analytics clarification request conversation_id=%s "
+            "question_length=%s",
+            _model_pk(conversation),
+            len(response.clarification.question),
+        )
         upsert_pending_clarification(
             conversation=conversation,
             question=response.clarification.question,
@@ -194,6 +282,13 @@ def _record_agent_result(
             "raw_agent_answer": result.raw_agent_answer,
         },
     )
+    logger.info(
+        "Recording analytics agent result conversation_id=%s assistant_turn_id=%s "
+        "executions=%s",
+        _model_pk(conversation),
+        _model_pk(turn),
+        len(result.executions),
+    )
 
     for execution in result.executions:
         record_generated_sql(
@@ -205,12 +300,28 @@ def _record_agent_result(
 
     successful_execution = _last_successful_execution(result.executions)
     if successful_execution is not None:
+        logger.info(
+            "Recording analytics result metadata conversation_id=%s assistant_turn_id=%s "
+            "row_count=%s returned_row_count=%s truncated=%s columns=%s",
+            _model_pk(conversation),
+            _model_pk(turn),
+            successful_execution.row_count,
+            successful_execution.returned_row_count,
+            successful_execution.truncated,
+            successful_execution.columns,
+        )
         record_result_metadata(
             turn=turn,
             row_count=successful_execution.row_count,
             returned_row_count=successful_execution.returned_row_count,
             truncated=successful_execution.truncated,
             columns=successful_execution.columns,
+        )
+    else:
+        logger.info(
+            "No successful SQL execution found conversation_id=%s assistant_turn_id=%s",
+            _model_pk(conversation),
+            _model_pk(turn),
         )
 
 

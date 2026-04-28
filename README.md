@@ -57,7 +57,7 @@ slack run
 
 ## LLM Configuration
 
-The analytics agent is configured entirely through environment variables — there is no hard-coded provider or model default.
+The analytics agent is configured entirely through environment variables.
 
 ### Required
 

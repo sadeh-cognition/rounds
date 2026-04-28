@@ -9,6 +9,7 @@ from analytics.chat_schemas import AnalyticsChatResponse, AnalyticsSnippetPayloa
 from slack_assistant.management.commands.run_slack_assistant import (
     build_chat_request,
     infer_sql_visibility_preference,
+    is_direct_user_message,
     post_chat_response,
     render_slack_message,
 )
@@ -45,6 +46,58 @@ def test_build_chat_request_uses_assistant_thread_identity_and_utc_timestamp() -
     assert payload.text == "how many apps do we have?"
     assert payload.utc_timestamp.tzinfo == timezone.utc
     assert payload.sql_visibility_preference == "auto"
+
+
+def test_build_chat_request_uses_message_ts_for_top_level_direct_message() -> None:
+    payload = build_chat_request(
+        body={"team_id": "T123"},
+        event={
+            "type": "message",
+            "channel_type": "im",
+            "channel": "D123",
+            "ts": "1710000001.000002",
+            "user": "U123",
+            "text": "how many apps do we have?",
+        },
+    )
+
+    assert payload.slack_channel_id == "D123"
+    assert payload.slack_thread_id == "1710000001.000002"
+    assert payload.text == "how many apps do we have?"
+
+
+def test_is_direct_user_message_matches_app_messages_tab_events() -> None:
+    assert is_direct_user_message(
+        {
+            "type": "message",
+            "channel_type": "im",
+            "channel": "D123",
+            "ts": "1710000001.000002",
+            "user": "U123",
+            "text": "how many apps do we have?",
+        }
+    )
+    assert not is_direct_user_message(
+        {
+            "type": "message",
+            "channel_type": "im",
+            "channel": "D123",
+            "thread_ts": "1710000000.000001",
+            "ts": "1710000001.000002",
+            "user": "U123",
+            "text": "follow up",
+        }
+    )
+    assert not is_direct_user_message(
+        {
+            "type": "message",
+            "channel_type": "im",
+            "channel": "D123",
+            "ts": "1710000001.000002",
+            "bot_id": "B123",
+            "text": "bot response",
+        }
+    )
 
 
 def test_infer_sql_visibility_preference_from_user_text() -> None:
@@ -112,6 +165,27 @@ def test_post_chat_response_posts_message_and_uploads_snippets() -> None:
     ]
     assert [upload["snippet_type"] for upload in client.uploads] == ["csv", "sql"]
     assert [upload["filename"] for upload in client.uploads] == ["results.csv", "query.sql"]
+
+
+def test_post_chat_response_can_post_top_level_direct_message() -> None:
+    client = FakeSlackClient()
+    response = AnalyticsChatResponse(message_text="There are 2 apps.")
+
+    post_chat_response(
+        client=client,  # type: ignore[arg-type]
+        channel_id="D123",
+        thread_ts=None,
+        response=response,
+    )
+
+    assert client.messages == [
+        {
+            "channel": "D123",
+            "text": "There are 2 apps.",
+            "unfurl_links": False,
+            "unfurl_media": False,
+        }
+    ]
 
 
 def test_first_bolt_app_manifest_supports_assistant_command() -> None:
