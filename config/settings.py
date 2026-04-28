@@ -66,7 +66,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    "analytics",
+    "analytics.apps.AnalyticsConfig",
     "slack_assistant",
 ]
 

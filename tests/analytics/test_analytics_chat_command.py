@@ -7,6 +7,7 @@ import pytest
 from django.core.management import call_command
 from rich.console import Console
 
+from analytics.agentic_qa import AgenticQAResult
 from analytics.chat_schemas import AnalyticsChatResponse
 from analytics.management.commands.analytics_chat import (
     build_cli_chat_request,
@@ -57,11 +58,19 @@ def test_render_cli_response_includes_table_and_truncation() -> None:
 
 
 @pytest.mark.django_db
-def test_analytics_chat_command_triggers_handle_analytics_chat_without_llm_config(
+def test_analytics_chat_command_uses_startup_llm_config_after_env_changes(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.delenv("LITELLM_MODEL", raising=False)
+    monkeypatch.setattr(
+        "analytics.chat_service.answer_question_with_agent",
+        lambda **_: AgenticQAResult(
+            response=AnalyticsChatResponse(message_text="There are 2 apps."),
+            executions=[],
+            raw_agent_answer='{"message_text": "There are 2 apps."}',
+        ),
+    )
 
     call_command(
         "analytics_chat",
@@ -77,7 +86,7 @@ def test_analytics_chat_command_triggers_handle_analytics_chat_without_llm_confi
     )
 
     captured = capsys.readouterr()
-    assert "SQL generation is not available yet" in captured.out
+    assert "There are 2 apps." in captured.out
 
     conversation = SlackConversation.objects.get(
         team_id="CLI",
@@ -89,7 +98,7 @@ def test_analytics_chat_command_triggers_handle_analytics_chat_without_llm_confi
         SlackTurn.Role.ASSISTANT,
     ]
     assistant_turn = conversation.turns.get(role=SlackTurn.Role.ASSISTANT)
-    assert assistant_turn.metadata["response_type"] == "agent_not_configured"
+    assert assistant_turn.metadata["response_type"] == "agent_answered"
     assert assistant_turn.metadata["sql_visibility_preference"] == "requested"
 
 
@@ -99,6 +108,14 @@ def test_analytics_chat_command_can_print_json(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.delenv("LITELLM_MODEL", raising=False)
+    monkeypatch.setattr(
+        "analytics.chat_service.answer_question_with_agent",
+        lambda **_: AgenticQAResult(
+            response=AnalyticsChatResponse(message_text="There are 2 apps."),
+            executions=[],
+            raw_agent_answer='{"message_text": "There are 2 apps."}',
+        ),
+    )
 
     call_command(
         "analytics_chat",
@@ -110,7 +127,7 @@ def test_analytics_chat_command_can_print_json(
 
     body = json.loads(capsys.readouterr().out)
     response = AnalyticsChatResponse.model_validate(body)
-    assert "SQL generation is not available yet" in response.message_text
+    assert response.message_text == "There are 2 apps."
     assert response.table_rows == []
 
 

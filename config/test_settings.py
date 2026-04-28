@@ -2,6 +2,8 @@
 
 import os
 
+os.environ.setdefault("LITELLM_MODEL", "groq/llama-3.1-8b-instant")
+
 from .settings import *  # noqa: F403
 
 

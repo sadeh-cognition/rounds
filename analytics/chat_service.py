@@ -12,8 +12,7 @@ from analytics.chat_schemas import (
 )
 from analytics.llm import (
     AnalyticsLLMConfig,
-    AnalyticsLLMConfigurationError,
-    get_analytics_llm_config,
+    get_configured_analytics_llm_config,
 )
 from analytics.models import SlackConversation
 from slack_assistant.persistence import (
@@ -108,39 +107,11 @@ def handle_analytics_chat(payload: AnalyticsChatRequest) -> AnalyticsChatRespons
             },
         )
 
-    try:
-        llm_config = get_analytics_llm_config()
-    except AnalyticsLLMConfigurationError:
-        logger.warning(
-            "Analytics LLM is not configured conversation_id=%s team=%s channel=%s "
-            "thread=%s",
-            _model_pk(conversation),
-            payload.slack_team_id,
-            payload.slack_channel_id,
-            payload.slack_thread_id,
-        )
-        response = build_agent_not_configured_response(payload)
-        record_assistant_response(
-            conversation=conversation,
-            text=response.message_text,
-            metadata={
-                "response_type": "agent_not_configured",
-                "sql_visibility_preference": payload.sql_visibility_preference,
-            },
-        )
-        logger.info(
-            "Returning agent-not-configured response conversation_id=%s message_length=%s",
-            _model_pk(conversation),
-            len(response.message_text),
-        )
-        return response
-
     return _answer_with_agent(
         payload=payload,
         conversation=conversation,
         question=payload.text,
         thread_context=thread_context,
-        config=llm_config,
         response_metadata={"response_type": "agent_answered"},
     )
 
@@ -164,35 +135,7 @@ def _answer_with_agent(
         context_turn_count,
         payload.sql_visibility_preference,
     )
-    try:
-        llm_config = config or get_analytics_llm_config()
-    except AnalyticsLLMConfigurationError:
-        resolved_clarification = response_metadata.get("pending_clarification")
-        response = build_agent_not_configured_response(
-            payload,
-            resolved_clarification=resolved_clarification
-            if isinstance(resolved_clarification, dict)
-            else None,
-        )
-        record_assistant_response(
-            conversation=conversation,
-            text=response.message_text,
-            metadata={
-                **response_metadata,
-                "response_type": response_metadata.get(
-                    "response_type",
-                    "agent_not_configured",
-                ),
-                "sql_visibility_preference": payload.sql_visibility_preference,
-            },
-        )
-        logger.warning(
-            "Analytics agent answer skipped because LLM config is missing "
-            "conversation_id=%s response_type=%s",
-            _model_pk(conversation),
-            response_metadata.get("response_type", "agent_not_configured"),
-        )
-        return response
+    llm_config = config or get_configured_analytics_llm_config()
 
     try:
         logger.info(
@@ -332,33 +275,6 @@ def _last_successful_execution(
         if execution.validation_status == "executed":
             return execution
     return None
-
-
-def build_agent_not_configured_response(
-    payload: AnalyticsChatRequest,
-    resolved_clarification: dict[str, object] | None = None,
-    config: AnalyticsLLMConfig | None = None,
-) -> AnalyticsChatResponse:
-    if config is not None:
-        message = (
-            "I saved this Slack thread turn. The analytics SQL agent will answer this "
-            "question in the next implementation slice."
-        )
-    else:
-        try:
-            get_analytics_llm_config()
-        except AnalyticsLLMConfigurationError as exc:
-            message = (
-                "I saved this Slack thread turn, but SQL generation is not available yet "
-                f"because {exc}"
-            )
-        else:
-            message = (
-                "I saved this Slack thread turn. The analytics SQL agent will answer this "
-                "question in the next implementation slice."
-            )
-
-    return AnalyticsChatResponse(message_text=message)
 
 
 def build_agent_failed_response(

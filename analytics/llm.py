@@ -61,6 +61,9 @@ class AnalyticsAgentRuntime:
     config: AnalyticsLLMConfig
 
 
+_analytics_llm_config: AnalyticsLLMConfig | None = None
+
+
 def get_analytics_llm_config() -> AnalyticsLLMConfig:
     """Load the analytics LLM configuration from environment variables.
 
@@ -79,9 +82,25 @@ def get_analytics_llm_config() -> AnalyticsLLMConfig:
     )
 
 
+def configure_analytics_llm() -> AnalyticsLLMConfig:
+    """Load and cache the analytics LLM configuration during app startup."""
+    global _analytics_llm_config
+    _analytics_llm_config = get_analytics_llm_config()
+    return _analytics_llm_config
+
+
+def get_configured_analytics_llm_config() -> AnalyticsLLMConfig:
+    """Return the startup-loaded analytics LLM configuration."""
+    if _analytics_llm_config is None:
+        raise AnalyticsLLMConfigurationError(
+            "Analytics LLM configuration has not been loaded at app startup."
+        )
+    return _analytics_llm_config
+
+
 def build_litellm_model(config: AnalyticsLLMConfig | None = None) -> LiteLLMModel:
     """Create the smolagents LiteLLM model using only env/settings config."""
-    resolved_config = config or get_analytics_llm_config()
+    resolved_config = config or get_configured_analytics_llm_config()
     return LiteLLMModel(model_id=resolved_config.model_id)
 
 
@@ -90,7 +109,7 @@ def build_analytics_agent_runtime(
     instructions: str | None = None,
 ) -> AnalyticsAgentRuntime:
     """Create the ToolCallingAgent runtime for portfolio analytics questions."""
-    resolved_config = config or get_analytics_llm_config()
+    resolved_config = config or get_configured_analytics_llm_config()
     model = build_litellm_model(resolved_config)
     agent = ToolCallingAgent(
         tools=[get_schema_context, get_today_date, run_readonly_sql],

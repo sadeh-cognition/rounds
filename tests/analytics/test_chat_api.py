@@ -30,10 +30,18 @@ def _payload(**overrides: object) -> dict[str, object]:
 
 
 @pytest.mark.django_db
-def test_chat_api_without_llm_config_does_not_make_local_ambiguity_decision(
+def test_chat_api_uses_startup_llm_config_after_env_changes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delenv("LITELLM_MODEL", raising=False)
+    monkeypatch.setattr(
+        "analytics.chat_service.answer_question_with_agent",
+        lambda **_: AgenticQAResult(
+            response=AnalyticsChatResponse(message_text="Use the configured agent."),
+            executions=[],
+            raw_agent_answer='{"message_text": "Use the configured agent."}',
+        ),
+    )
 
     response = client.post(
         "/analytics/chat",
@@ -42,7 +50,7 @@ def test_chat_api_without_llm_config_does_not_make_local_ambiguity_decision(
 
     assert response.status_code == 200
     body = AnalyticsChatResponse.model_validate(response.json())
-    assert body.clarification is None
+    assert body.message_text == "Use the configured agent."
     assert body.table_rows == []
 
     conversation = SlackConversation.objects.get()
@@ -52,7 +60,7 @@ def test_chat_api_without_llm_config_does_not_make_local_ambiguity_decision(
         SlackTurn.Role.ASSISTANT,
     ]
     assistant_turn = conversation.turns.get(role=SlackTurn.Role.ASSISTANT)
-    assert assistant_turn.metadata["response_type"] == "agent_not_configured"
+    assert assistant_turn.metadata["response_type"] == "agent_answered"
 
 
 @pytest.mark.django_db
@@ -123,6 +131,14 @@ def test_chat_api_resolves_pending_clarification_from_next_reply(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delenv("LITELLM_MODEL", raising=False)
+    monkeypatch.setattr(
+        "analytics.chat_service.answer_question_with_agent",
+        lambda **_: AgenticQAResult(
+            response=AnalyticsChatResponse(message_text="Using total revenue."),
+            executions=[],
+            raw_agent_answer='{"message_text": "Using total revenue."}',
+        ),
+    )
     conversation = SlackConversation.objects.create(
         team_id="T123",
         channel_id="C123",
@@ -169,6 +185,14 @@ def test_chat_api_records_sql_visibility_preference_without_generating_sql(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delenv("LITELLM_MODEL", raising=False)
+    monkeypatch.setattr(
+        "analytics.chat_service.answer_question_with_agent",
+        lambda **_: AgenticQAResult(
+            response=AnalyticsChatResponse(message_text="No SQL needed."),
+            executions=[],
+            raw_agent_answer='{"message_text": "No SQL needed."}',
+        ),
+    )
 
     response = client.post(
         "/analytics/chat",
@@ -187,8 +211,10 @@ def test_chat_api_records_sql_visibility_preference_without_generating_sql(
 
     assistant_turn = SlackTurn.objects.get(role=SlackTurn.Role.ASSISTANT)
     assert assistant_turn.metadata == {
-        "response_type": "agent_not_configured",
+        "response_type": "agent_answered",
         "sql_visibility_preference": "requested",
+        "execution_count": 0,
+        "raw_agent_answer": '{"message_text": "No SQL needed."}',
     }
 
 
