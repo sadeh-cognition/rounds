@@ -115,7 +115,7 @@ def test_post_chat_response_posts_message_and_uploads_snippets() -> None:
 
 
 def test_first_bolt_app_manifest_supports_assistant_command() -> None:
-    manifest_path = Path(__file__).resolve().parents[1] / "first-bolt-app" / "manifest.json"
+    manifest_path = Path(__file__).resolve().parents[2] / "first-bolt-app" / "manifest.json"
     manifest = json.loads(manifest_path.read_text())
 
     assert "assistant_view" in manifest["features"]
