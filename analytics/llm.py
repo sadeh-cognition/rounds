@@ -16,7 +16,7 @@ class AnalyticsLLMConfigurationError(ValueError):
 @dataclass(frozen=True)
 class AnalyticsLLMConfig:
     model_id: str
-    sql_repair_retries: int
+    sql_repair_retries: int = 2
 
 
 class AnalyticsLLMSettings(BaseSettings):
@@ -35,7 +35,9 @@ class AnalyticsLLMSettings(BaseSettings):
     def require_litellm_model(cls, value: str) -> str:
         model_id = value.strip()
         if not model_id:
-            raise ValueError("LITELLM_MODEL must be configured for the analytics agent.")
+            raise ValueError(
+                "LITELLM_MODEL must be configured for the analytics agent."
+            )
         return model_id
 
     @field_validator("analytics_sql_repair_retries", mode="before")
@@ -49,9 +51,7 @@ class AnalyticsLLMSettings(BaseSettings):
             ) from exc
 
         if retries <= 0:
-            raise ValueError(
-                "ANALYTICS_SQL_REPAIR_RETRIES must be a positive integer."
-            )
+            raise ValueError("ANALYTICS_SQL_REPAIR_RETRIES must be a positive integer.")
         return retries
 
 
@@ -95,10 +95,11 @@ def build_analytics_agent_runtime(
     agent = ToolCallingAgent(
         tools=[get_schema_context, get_today_date, run_readonly_sql],
         model=model,
-        max_steps=resolved_config.sql_repair_retries + 1,
+        max_steps=10,
         instructions=instructions,
     )
     return AnalyticsAgentRuntime(agent=agent, config=resolved_config)
+
 
 def _format_settings_error(exc: ValidationError) -> str:
     first_error = exc.errors()[0]

@@ -106,7 +106,7 @@ def test_infer_sql_visibility_preference_from_user_text() -> None:
     assert infer_sql_visibility_preference("How many apps do we have?") == "auto"
 
 
-def test_render_slack_message_includes_table_assumptions_and_truncation() -> None:
+def test_render_slack_message_includes_table_and_truncation() -> None:
     response = AnalyticsChatResponse(
         message_text="Top countries by installs:",
         table_columns=["country", "installs"],
@@ -114,7 +114,6 @@ def test_render_slack_message_includes_table_assumptions_and_truncation() -> Non
             {"country": "US", "installs": 120},
             {"country": "DE", "installs": 45},
         ],
-        assumptions=["Dates are interpreted as UTC calendar dates."],
         row_count=500,
         returned_row_count=25,
         truncated=True,
@@ -125,7 +124,6 @@ def test_render_slack_message_includes_table_assumptions_and_truncation() -> Non
     assert "Top countries by installs:" in text
     assert "country | installs" in text
     assert "US      | 120" in text
-    assert "*Assumptions*" in text
     assert "Showing 25 of 500 returned rows." in text
 
 

@@ -54,12 +54,6 @@ def render_cli_response(response: AnalyticsChatResponse, *, console: Console) ->
             table.add_row(*[_cell_text(row.get(column)) for column in response.table_columns])
         console.print(table)
 
-    if response.assumptions:
-        console.print()
-        console.print("[bold]Assumptions[/bold]")
-        for assumption in response.assumptions:
-            console.print(f"- {assumption}")
-
     if response.truncated:
         console.print(
             f"Showing {response.returned_row_count} of {response.row_count} returned rows."

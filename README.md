@@ -129,7 +129,7 @@ Country values are ISO-3166 alpha-2 codes (e.g. US, GB, JP).
 # Question Answering
 
 The chatbot handles a wide range of data requests while maintaining a natural conversational flow that allows for follow-up questions. It intelligently interprets user intent and provides responses with an appropriate level of detail.
-It processes natural language queries related to the app portfolio and provides responses either in plain text or as detailed tables, depending on query complexity. Table responses include clear descriptions and note any assumptions made.
+It processes natural language queries related to the app portfolio and provides responses either in plain text or as detailed tables, depending on query complexity. If required details are missing, it asks a clarifying question before answering.
 Users can ask follow-up questions within the same Slack thread, and the conversation context is
 maintained across turns.
 The chatbot uses a LLM for natural language understanding and SQL generation, ensuring that the generated SQL is syntactically correct and optimized for performance. It also includes error handling to manage invalid queries gracefully. Use litellm here.
@@ -162,7 +162,7 @@ More complex questions
 Revenue leaders by country.
 user: which countries generate the most revenue?
 bot: [table with country name and total revenue]
-[brief text summary explaining timeframe assumptions]
+[asks a clarification first if the timeframe is missing]
 iOS apps ranked by popularity.
 user: List all ios apps sorted by their popularity
 bot: [table of iOS apps sorted by popularity]
@@ -203,7 +203,7 @@ Key decisions locked:
   - Unmanaged models or SQLAlchemy/introspection helpers for the existing apps and daily_metrics tables; do not modify provided seed tables.
 - Add POST /api/analytics/chat:
   - Request includes Slack team/channel/thread/user IDs, user text, UTC timestamp, and SQL visibility preference.
-  - Response includes message text, optional table rows, optional CSV/SQL snippet payloads, assumptions/clarifications
+  - Response includes message text, optional table rows, optional CSV/SQL snippet payloads, and clarification state
 - Add a Slack management command:
   - uv run manage.py run_slack_assistant
   - Uses Bolt Assistant middleware + Socket Mode.
@@ -263,7 +263,7 @@ Key decisions locked:
   - Ask scalar, follow-up, table, raw-data, clarification, SQL-on-request, and SQL-error-repair questions.
   - Confirm Phoenix shows the full agent trace.
 
-## Assumptions
+## Implementation Notes
 
 - The provided apps and daily_metrics tables remain unchanged.
 - Django may add its own metadata tables to the same Postgres database.
@@ -328,7 +328,7 @@ Here is an ordered feature list extracted from the plan.
   - optional table rows
   - optional CSV snippet payload
   - optional SQL snippet payload
-  - assumptions or clarification state
+  - clarification state
 
 ### LLM Configuration
 
@@ -414,7 +414,7 @@ Here is an ordered feature list extracted from the plan.
 - Return multi-row results as summary plus Slack-friendly table.
 - Return large/raw results as CSV snippets.
 - Include SQL as .sql snippet only when requested or useful after failure.
-- Include assumptions/clarification notes where applicable.
+- Include clarification notes where applicable.
 
 ### Slack Assistant Integration
 

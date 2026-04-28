@@ -46,7 +46,6 @@ class AnalyticsChatResponse(Schema):
     table_rows: list[dict[str, Any]] = Field(default_factory=list)
     csv_snippet: AnalyticsSnippetPayload | None = None
     sql_snippet: AnalyticsSnippetPayload | None = None
-    assumptions: list[str] = Field(default_factory=list)
     clarification: AnalyticsClarificationPayload | None = None
     row_count: int = 0
     returned_row_count: int = 0

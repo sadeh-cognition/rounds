@@ -4,7 +4,7 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, ValidationError
 
 from analytics.agent_tools import (
     SQLExecutionRecord,
@@ -23,7 +23,6 @@ from analytics.tracing import configure_phoenix_tracing
 
 class AgentFinalAnswer(BaseModel):
     message_text: str
-    assumptions: list[str] = Field(default_factory=list)
     needs_clarification: bool = False
     clarification_question: str = ""
 
@@ -39,24 +38,28 @@ AGENT_INSTRUCTIONS = """
 You answer Slack portfolio analytics questions by generating and executing SQL.
 
 Follow this workflow:
-1. Call get_schema_context first with conversation_context serialized as a JSON
+- Call get_schema_context first with conversation_context serialized as a JSON
    object string. Use only the returned schema, metric definitions, row limits,
    and conversation context.
-2. Call get_today_date when the question uses relative dates such as today,
-   yesterday, this week, this month, or last month.
-3. If the request is missing a necessary business definition, entity, date range,
-   grouping, or comparison target, ask one concise clarification question instead
+- If the request is missing a necessary business definition, entity, date range,
+   grouping, or comparison target, ask concise clarification questions instead
    of running SQL.
-4. Otherwise generate one read-only PostgreSQL SELECT/WITH query and call
+- Do not make assumptions or decisions for what a reasonable or default value should be.
+  Instead ask for clarifications.
+- If there are any ambiguities in the question, ask concise clarification questions to resolve them.
+  Do not try to resolve such issues.
+- If answering would require an unstated detail from the user, set
+   needs_clarification=true and ask the user to clarify it.
+- If there are no clarifications needed generate one read-only PostgreSQL SELECT/WITH query and call
    run_readonly_sql.
-5. If run_readonly_sql returns ok=false, repair the SQL using the returned error
+- If run_readonly_sql returns ok=false, repair the SQL using the returned error
    and call run_readonly_sql again. Do not give up until the configured step limit
    is reached.
-6. Use only the rows returned by run_readonly_sql to answer. Do not invent data
+- Use only the rows returned by run_readonly_sql to answer. Do not invent data
    and do not run hidden availability checks after a no-data result.
 
 Return the final answer as JSON with exactly these keys:
-message_text, assumptions, needs_clarification, clarification_question.
+message_text, needs_clarification, clarification_question.
 """
 
 
@@ -81,7 +84,6 @@ def answer_question_with_agent(
             "sql_visibility_preference": sql_visibility_preference,
             "required_final_answer_format": {
                 "message_text": "Natural-language answer for the user.",
-                "assumptions": ["Short assumption strings."],
                 "needs_clarification": False,
                 "clarification_question": "",
             },
@@ -127,23 +129,10 @@ def _build_chat_response(
     executions: list[SQLExecutionRecord],
     sql_visibility_preference: SqlVisibilityPreference,
 ) -> AnalyticsChatResponse:
-    assumptions = ["Dates are interpreted as UTC calendar dates."]
-    assumptions.extend(
-        assumption
-        for assumption in final_answer.assumptions
-        if assumption and assumption not in assumptions
-    )
-    if (
-        sql_visibility_preference == "requested"
-        and "SQL was requested" not in assumptions
-    ):
-        assumptions.append("SQL was requested")
-
     if final_answer.needs_clarification:
-        question = final_answer.clarification_question or final_answer.message_text
+        question = _build_clarification_question(final_answer)
         return AnalyticsChatResponse(
             message_text=question,
-            assumptions=assumptions,
             clarification=AnalyticsClarificationPayload(
                 required=True,
                 question=question,
@@ -159,7 +148,6 @@ def _build_chat_response(
     if successful_execution is None:
         return AnalyticsChatResponse(
             message_text=final_answer.message_text,
-            assumptions=assumptions,
             sql_snippet=sql_snippet,
         )
 
@@ -168,11 +156,18 @@ def _build_chat_response(
         table_columns=successful_execution.columns,
         table_rows=successful_execution.rows[:25],
         sql_snippet=sql_snippet,
-        assumptions=assumptions,
         row_count=successful_execution.row_count,
         returned_row_count=successful_execution.returned_row_count,
         truncated=successful_execution.truncated,
     )
+
+
+def _build_clarification_question(final_answer: AgentFinalAnswer) -> str:
+    if final_answer.clarification_question:
+        return final_answer.clarification_question
+    if final_answer.message_text:
+        return final_answer.message_text
+    return "Can you clarify the missing detail before I answer?"
 
 
 def _last_successful_execution(

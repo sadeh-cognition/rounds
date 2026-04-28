@@ -230,10 +230,6 @@ def render_slack_message(response: AnalyticsChatResponse) -> str:
     if response.table_columns and response.table_rows:
         parts.append(render_slack_table(response.table_columns, response.table_rows))
 
-    if response.assumptions:
-        assumptions = "\n".join(f"- {assumption}" for assumption in response.assumptions)
-        parts.append(f"*Assumptions*\n{assumptions}")
-
     if response.truncated:
         parts.append(
             f"Showing {response.returned_row_count} of {response.row_count} returned rows."

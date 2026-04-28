@@ -34,13 +34,12 @@ def test_build_cli_chat_request_uses_cli_identity_and_utc_timestamp() -> None:
     assert payload.sql_visibility_preference == "requested"
 
 
-def test_render_cli_response_includes_table_assumptions_and_truncation() -> None:
+def test_render_cli_response_includes_table_and_truncation() -> None:
     console = Console(record=True, force_terminal=False, width=120)
     response = AnalyticsChatResponse(
         message_text="Top countries by installs:",
         table_columns=["country", "installs"],
         table_rows=[{"country": "US", "installs": 120}],
-        assumptions=["Dates are interpreted as UTC calendar dates."],
         row_count=500,
         returned_row_count=25,
         truncated=True,
@@ -54,7 +53,6 @@ def test_render_cli_response_includes_table_assumptions_and_truncation() -> None
     assert "installs" in text
     assert "US" in text
     assert "120" in text
-    assert "Assumptions" in text
     assert "Showing 25 of 500 returned rows." in text
 
 
@@ -80,7 +78,6 @@ def test_analytics_chat_command_triggers_handle_analytics_chat_without_llm_confi
 
     captured = capsys.readouterr()
     assert "SQL generation is not available yet" in captured.out
-    assert "SQL was requested" in captured.out
 
     conversation = SlackConversation.objects.get(
         team_id="CLI",

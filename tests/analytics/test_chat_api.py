@@ -153,7 +153,6 @@ def test_chat_api_resolves_pending_clarification_from_next_reply(
     assert response.status_code == 200
     body = AnalyticsChatResponse.model_validate(response.json())
     assert body.clarification is None
-    assert "Resolved clarification for revenue: Use total revenue" in body.assumptions
     assert PendingClarification.objects.count() == 0
 
     assistant_turn = SlackTurn.objects.filter(role=SlackTurn.Role.ASSISTANT).latest("id")
@@ -183,7 +182,6 @@ def test_chat_api_records_sql_visibility_preference_without_generating_sql(
     body = AnalyticsChatResponse.model_validate(response.json())
     assert body.clarification is None
     assert body.sql_snippet is None
-    assert "SQL was requested" in body.assumptions
     assert body.row_count == 0
     assert body.truncated is False
 
@@ -208,7 +206,6 @@ def test_chat_api_answers_with_agent_and_persists_sql_result(
                 message_text="There are 2 apps.",
                 table_columns=["app_count"],
                 table_rows=[{"app_count": 2}],
-                assumptions=["Dates are interpreted as UTC calendar dates."],
                 row_count=1,
                 returned_row_count=1,
             ),

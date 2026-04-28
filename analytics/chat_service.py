@@ -358,38 +358,18 @@ def build_agent_not_configured_response(
                 "question in the next implementation slice."
             )
 
-    assumptions = ["Dates are interpreted as UTC calendar dates."]
-    if resolved_clarification is not None:
-        context = resolved_clarification.get("context", {})
-        if isinstance(context, dict):
-            ambiguous_term = context.get("ambiguous_term")
-            if isinstance(ambiguous_term, str) and ambiguous_term:
-                assumptions.append(
-                    f"Resolved clarification for {ambiguous_term}: {payload.text}"
-                )
-    if payload.sql_visibility_preference == "requested":
-        assumptions.append("SQL was requested")
-
-    return AnalyticsChatResponse(
-        message_text=message,
-        assumptions=assumptions,
-    )
+    return AnalyticsChatResponse(message_text=message)
 
 
 def build_agent_failed_response(
     payload: AnalyticsChatRequest,
     exc: Exception,
 ) -> AnalyticsChatResponse:
-    assumptions = ["Dates are interpreted as UTC calendar dates."]
-    if payload.sql_visibility_preference == "requested":
-        assumptions.append("SQL was requested")
-
     return AnalyticsChatResponse(
         message_text=(
             "I saved this Slack thread turn, but the analytics SQL agent could not "
             f"complete the answer: {exc}"
         ),
-        assumptions=assumptions,
     )
 
 
