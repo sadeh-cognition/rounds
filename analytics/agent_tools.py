@@ -4,6 +4,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
+import json
 from typing import Any
 
 import sqlglot
@@ -43,13 +44,19 @@ def get_sql_execution_records() -> list[SQLExecutionRecord]:
 
 
 @tool
-def get_schema_context(conversation_context: dict[str, Any] | None = None) -> dict[str, Any]:
+def get_schema_context(conversation_context_json: str = "{}") -> dict[str, Any]:
     """Return allowed analytics schema and SQL rules for portfolio questions.
 
     Args:
-        conversation_context: Optional persisted Slack thread context and prior-turn
-            details that can help resolve follow-up questions.
+        conversation_context_json: Optional JSON object string containing persisted
+            Slack thread context and prior-turn details for follow-up questions.
     """
+    try:
+        conversation_context = json.loads(conversation_context_json)
+    except json.JSONDecodeError:
+        conversation_context = {}
+    if not isinstance(conversation_context, dict):
+        conversation_context = {}
     return get_analytics_schema_context(conversation_context=conversation_context)
 
 

@@ -39,8 +39,9 @@ AGENT_INSTRUCTIONS = """
 You answer Slack portfolio analytics questions by generating and executing SQL.
 
 Follow this workflow:
-1. Call get_schema_context first and use only the returned schema, metric definitions,
-   row limits, and conversation context.
+1. Call get_schema_context first with conversation_context serialized as a JSON
+   object string. Use only the returned schema, metric definitions, row limits,
+   and conversation context.
 2. Call get_today_date when the question uses relative dates such as today,
    yesterday, this week, this month, or last month.
 3. If the request is missing a necessary business definition, entity, date range,

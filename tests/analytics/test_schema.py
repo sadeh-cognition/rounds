@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from analytics.agent_tools import get_schema_context
 from analytics.models import AnalyticsApp, DailyMetric
 from analytics.schema import ALLOWED_TABLE_NAMES, get_analytics_schema_context
@@ -68,10 +70,17 @@ def test_schema_context_includes_metric_definitions_without_ambiguity_rules() ->
 
 
 def test_smolagents_tool_returns_same_schema_context() -> None:
-    context = get_schema_context.forward({"thread_ts": "123.456"})
+    context = get_schema_context.forward(json.dumps({"thread_ts": "123.456"}))
 
     assert [table["name"] for table in context["allowed_tables"]] == [
         "apps",
         "daily_metrics",
     ]
     assert context["conversation_context"] == {"thread_ts": "123.456"}
+
+
+def test_smolagents_tool_schema_uses_provider_compatible_types() -> None:
+    input_schema = get_schema_context.inputs["conversation_context_json"]
+
+    assert input_schema["type"] == "string"
+    assert "additionalProperties" not in input_schema
