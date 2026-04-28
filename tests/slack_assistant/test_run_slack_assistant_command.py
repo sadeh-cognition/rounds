@@ -131,3 +131,10 @@ def test_first_bolt_app_manifest_supports_assistant_command() -> None:
         "message.im",
     }
     assert manifest["settings"]["socket_mode_enabled"] is True
+
+
+def test_first_bolt_app_slack_hooks_use_project_uv_environment() -> None:
+    hooks_path = Path(__file__).resolve().parents[2] / "first-bolt-app" / ".slack" / "hooks.json"
+    hooks = json.loads(hooks_path.read_text())
+
+    assert hooks["hooks"]["get-hooks"] == "uv run python -m slack_cli_hooks.hooks.get_hooks"

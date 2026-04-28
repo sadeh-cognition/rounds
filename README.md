@@ -6,6 +6,8 @@ Install and sync dependencies:
 uv sync
 ```
 
+Install Slack CLI and authenticate: <https://docs.slack.dev/tools/bolt-python/getting-started>
+
 Start the provided Postgres database:
 
 ```bash
@@ -78,18 +80,21 @@ Provider API keys are **not** managed by this setting — set them directly in t
 2. Set `LITELLM_MODEL` and the corresponding provider API key:
 
 **Groq**
+
 ```env
 LITELLM_MODEL=groq/llama-3.1-8b-instant
 GROQ_API_KEY=gsk_...
 ```
 
 **OpenAI**
+
 ```env
 LITELLM_MODEL=openai/gpt-4o
 OPENAI_API_KEY=sk-...
 ```
 
 **Anthropic**
+
 ```env
 LITELLM_MODEL=anthropic/claude-3-5-sonnet-20241022
 ANTHROPIC_API_KEY=sk-ant-...
