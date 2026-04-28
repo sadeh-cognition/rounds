@@ -2,11 +2,9 @@ from __future__ import annotations
 
 from django.db import transaction
 
-from analytics.ambiguity import AmbiguityDecision, decide_ambiguity_with_llm
 from analytics.agent_tools import SQLExecutionRecord
 from analytics.agentic_qa import AgenticQAResult, answer_question_with_agent
 from analytics.chat_schemas import (
-    AnalyticsClarificationPayload,
     AnalyticsChatRequest,
     AnalyticsChatResponse,
 )
@@ -87,49 +85,6 @@ def handle_analytics_chat(payload: AnalyticsChatRequest) -> AnalyticsChatRespons
             metadata={
                 "response_type": "agent_not_configured",
                 "sql_visibility_preference": payload.sql_visibility_preference,
-            },
-        )
-        return response
-
-    try:
-        ambiguity = decide_ambiguity_with_llm(
-            text=payload.text,
-            conversation_context=thread_context,
-            config=llm_config,
-        )
-    except Exception as exc:
-        response = build_ambiguity_detection_failed_response(payload, exc)
-        record_assistant_response(
-            conversation=conversation,
-            text=response.message_text,
-            metadata={
-                "response_type": "ambiguity_detection_failed",
-                "sql_visibility_preference": payload.sql_visibility_preference,
-                "error": str(exc),
-            },
-        )
-        return response
-
-    if ambiguity.needs_clarification:
-        response = build_clarification_response(payload, ambiguity)
-        upsert_pending_clarification(
-            conversation=conversation,
-            question=ambiguity.question,
-            context={
-                "ambiguous_term": ambiguity.ambiguous_term,
-                "possible_interpretations": ambiguity.possible_interpretations,
-                "original_text": payload.text,
-                "sql_visibility_preference": payload.sql_visibility_preference,
-                "utc_timestamp": payload.utc_timestamp.isoformat(),
-            },
-        )
-        record_assistant_response(
-            conversation=conversation,
-            text=response.message_text,
-            metadata={
-                "response_type": "clarification_requested",
-                "sql_visibility_preference": payload.sql_visibility_preference,
-                "ambiguous_term": ambiguity.ambiguous_term,
             },
         )
         return response
@@ -306,47 +261,6 @@ def build_agent_not_configured_response(
 
     return AnalyticsChatResponse(
         message_text=message,
-        assumptions=assumptions,
-    )
-
-
-def build_clarification_response(
-    payload: AnalyticsChatRequest,
-    ambiguity: AmbiguityDecision,
-) -> AnalyticsChatResponse:
-    assumptions = ["Dates are interpreted as UTC calendar dates."]
-    if payload.sql_visibility_preference == "requested":
-        assumptions.append("SQL was requested")
-
-    context = {
-        "ambiguous_term": ambiguity.ambiguous_term,
-        "possible_interpretations": ambiguity.possible_interpretations,
-        "original_text": payload.text,
-    }
-    return AnalyticsChatResponse(
-        message_text=ambiguity.question,
-        assumptions=assumptions,
-        clarification=AnalyticsClarificationPayload(
-            required=True,
-            question=ambiguity.question,
-            context=context,
-        ),
-    )
-
-
-def build_ambiguity_detection_failed_response(
-    payload: AnalyticsChatRequest,
-    exc: Exception,
-) -> AnalyticsChatResponse:
-    assumptions = ["Dates are interpreted as UTC calendar dates."]
-    if payload.sql_visibility_preference == "requested":
-        assumptions.append("SQL was requested")
-
-    return AnalyticsChatResponse(
-        message_text=(
-            "I saved this Slack thread turn, but I could not check whether it needs "
-            f"clarification before SQL generation: {exc}"
-        ),
         assumptions=assumptions,
     )
 

@@ -56,19 +56,33 @@ def test_chat_api_without_llm_config_does_not_make_local_ambiguity_decision(
 
 
 @pytest.mark.django_db
-def test_chat_api_clarification_response_is_persisted_when_model_decides(
+def test_chat_api_clarification_response_is_persisted_when_agent_requests_it(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from analytics.ambiguity import AmbiguityDecision
+    from analytics.chat_schemas import AnalyticsClarificationPayload
 
     monkeypatch.setenv("LITELLM_MODEL", "groq/llama-3.1-8b-instant")
     monkeypatch.setattr(
-        "analytics.chat_service.decide_ambiguity_with_llm",
-        lambda **_: AmbiguityDecision(
-            needs_clarification=True,
-            question="Which revenue definition should I use?",
-            ambiguous_term="revenue",
-            possible_interpretations=["in-app revenue", "ads revenue", "total revenue"],
+        "analytics.chat_service.answer_question_with_agent",
+        lambda **_: AgenticQAResult(
+            response=AnalyticsChatResponse(
+                message_text="Which revenue definition should I use?",
+                clarification=AnalyticsClarificationPayload(
+                    required=True,
+                    question="Which revenue definition should I use?",
+                    context={
+                        "source": "analytics_agent",
+                        "ambiguous_term": "revenue",
+                        "possible_interpretations": [
+                            "in-app revenue",
+                            "ads revenue",
+                            "total revenue",
+                        ],
+                    },
+                ),
+            ),
+            executions=[],
+            raw_agent_answer='{"needs_clarification": true}',
         ),
     )
 
@@ -83,17 +97,20 @@ def test_chat_api_clarification_response_is_persisted_when_model_decides(
     assert body.clarification is not None
     assert body.clarification.required is True
     assert body.clarification.context == {
+        "source": "analytics_agent",
         "ambiguous_term": "revenue",
         "possible_interpretations": [
             "in-app revenue",
             "ads revenue",
             "total revenue",
         ],
-        "original_text": "which countries generate the most revenue?",
     }
 
     pending = PendingClarification.objects.get()
     assert pending.question == "Which revenue definition should I use?"
+    assert pending.context["original_text"] == (
+        "which countries generate the most revenue?"
+    )
     assert pending.context["possible_interpretations"] == [
         "in-app revenue",
         "ads revenue",
@@ -102,7 +119,10 @@ def test_chat_api_clarification_response_is_persisted_when_model_decides(
 
 
 @pytest.mark.django_db
-def test_chat_api_resolves_pending_clarification_from_next_reply() -> None:
+def test_chat_api_resolves_pending_clarification_from_next_reply(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("LITELLM_MODEL", raising=False)
     conversation = SlackConversation.objects.create(
         team_id="T123",
         channel_id="C123",
@@ -178,13 +198,7 @@ def test_chat_api_records_sql_visibility_preference_without_generating_sql(
 def test_chat_api_answers_with_agent_and_persists_sql_result(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from analytics.ambiguity import AmbiguityDecision
-
     monkeypatch.setenv("LITELLM_MODEL", "groq/llama-3.1-8b-instant")
-    monkeypatch.setattr(
-        "analytics.chat_service.decide_ambiguity_with_llm",
-        lambda **_: AmbiguityDecision(needs_clarification=False),
-    )
 
     def answer_with_agent(**kwargs: object) -> AgenticQAResult:
         assert kwargs["question"] == "how many apps do we have?"
@@ -237,14 +251,9 @@ def test_chat_api_answers_with_agent_and_persists_sql_result(
 def test_chat_api_stores_agent_clarification_as_pending(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from analytics.ambiguity import AmbiguityDecision
     from analytics.chat_schemas import AnalyticsClarificationPayload
 
     monkeypatch.setenv("LITELLM_MODEL", "groq/llama-3.1-8b-instant")
-    monkeypatch.setattr(
-        "analytics.chat_service.decide_ambiguity_with_llm",
-        lambda **_: AmbiguityDecision(needs_clarification=False),
-    )
     monkeypatch.setattr(
         "analytics.chat_service.answer_question_with_agent",
         lambda **_: AgenticQAResult(
