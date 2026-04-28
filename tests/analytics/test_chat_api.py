@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import logging
 
+import litellm
 import pytest
 from ninja.testing import TestClient
 
@@ -268,6 +270,40 @@ def test_chat_api_answers_with_agent_and_persists_sql_result(
     assert assistant_turn.generated_sql.get().sql == "SELECT COUNT(*) AS app_count FROM apps"
     assert assistant_turn.result_metadata.row_count == 1
     assert assistant_turn.result_metadata.columns == ["app_count"]
+
+
+@pytest.mark.django_db
+def test_chat_api_reraises_litellm_errors_without_persisting_assistant_turn(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    monkeypatch.setattr(logging.getLogger("analytics"), "propagate", True)
+    caplog.set_level("ERROR", logger="analytics.chat_service")
+    monkeypatch.setenv("LITELLM_MODEL", "groq/llama-3.1-8b-instant")
+
+    def answer_with_agent(**kwargs: object) -> AgenticQAResult:
+        raise litellm.APIConnectionError(
+            message="provider unavailable",
+            llm_provider="groq",
+            model="llama-3.1-8b-instant",
+        )
+
+    monkeypatch.setattr("analytics.chat_service.answer_question_with_agent", answer_with_agent)
+
+    with pytest.raises(litellm.APIConnectionError):
+        client.post("/analytics/chat", json=_payload())
+
+    assert SlackConversation.objects.count() == 1
+    conversation = SlackConversation.objects.get()
+    assert list(conversation.turns.values_list("role", flat=True)) == [
+        SlackTurn.Role.USER,
+    ]
+    assert not any(
+        turn.role == SlackTurn.Role.ASSISTANT
+        and "provider unavailable" in turn.text
+        for turn in conversation.turns.all()
+    )
+    assert "Analytics SQL agent LiteLLM failure" in caplog.text
 
 
 @pytest.mark.django_db

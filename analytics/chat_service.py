@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 
 from django.db import transaction
+from openai import OpenAIError
 
 from analytics.agent_tools import SQLExecutionRecord
 from analytics.agentic_qa import AgenticQAResult, answer_question_with_agent
@@ -149,7 +150,22 @@ def _answer_with_agent(
             sql_visibility_preference=payload.sql_visibility_preference,
             config=llm_config,
         )
+    except OpenAIError as exc:
+        logger.exception(
+            "Analytics SQL agent LiteLLM failure conversation_id=%s error_type=%s",
+            _model_pk(conversation),
+            type(exc).__name__,
+        )
+        raise
     except Exception as exc:
+        if _has_litellm_cause(exc):
+            logger.exception(
+                "Analytics SQL agent LiteLLM failure conversation_id=%s error_type=%s",
+                _model_pk(conversation),
+                type(exc).__name__,
+            )
+            raise
+
         logger.exception(
             "Analytics SQL agent failed conversation_id=%s error_type=%s",
             _model_pk(conversation),
@@ -275,6 +291,15 @@ def _last_successful_execution(
         if execution.validation_status == "executed":
             return execution
     return None
+
+
+def _has_litellm_cause(exc: BaseException) -> bool:
+    current = exc.__cause__ or exc.__context__
+    while current is not None:
+        if isinstance(current, OpenAIError):
+            return True
+        current = current.__cause__ or current.__context__
+    return False
 
 
 def build_agent_failed_response(
