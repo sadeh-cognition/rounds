@@ -5,7 +5,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 from dotenv import load_dotenv
 
-assert load_dotenv(".env")
+load_dotenv(".env")
 
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
