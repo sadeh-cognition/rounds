@@ -118,6 +118,7 @@ METRIC_DEFINITIONS = {
     "roas": "(in_app_revenue + ads_revenue) / ua_cost when ua_cost is non-zero",
 }
 
+
 def get_analytics_schema_context(
     conversation_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:

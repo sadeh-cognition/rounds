@@ -62,7 +62,7 @@ class RequestResponseLoggingMiddleware:
         try:
             charset = response_with_content.charset or "utf-8"
             return json.loads(content.decode(charset))
-        except (UnicodeDecodeError, json.JSONDecodeError):
+        except UnicodeDecodeError, json.JSONDecodeError:
             logger.warning(
                 json.dumps(
                     {

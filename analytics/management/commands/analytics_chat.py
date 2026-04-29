@@ -51,7 +51,9 @@ def render_cli_response(response: AnalyticsChatResponse, *, console: Console) ->
         for column in response.table_columns:
             table.add_column(column)
         for row in response.table_rows:
-            table.add_row(*[_cell_text(row.get(column)) for column in response.table_columns])
+            table.add_row(
+                *[_cell_text(row.get(column)) for column in response.table_columns]
+            )
         console.print(table)
 
     if response.truncated:
@@ -61,7 +63,9 @@ def render_cli_response(response: AnalyticsChatResponse, *, console: Console) ->
 
     if response.clarification is not None and response.clarification.required:
         console.print()
-        console.print(f"[bold]Clarification needed:[/bold] {response.clarification.question}")
+        console.print(
+            f"[bold]Clarification needed:[/bold] {response.clarification.question}"
+        )
 
     for label, snippet in (
         ("CSV", response.csv_snippet),

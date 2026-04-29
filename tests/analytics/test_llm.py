@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import io
+
+from loguru import logger as loguru_logger
 import pytest
 from smolagents import LiteLLMModel, ToolCallingAgent
 
@@ -69,6 +72,27 @@ def test_configured_llm_config_is_loaded_once_from_env(
         assert startup_config.sql_repair_retries == 4
         assert get_configured_analytics_llm_config() == startup_config
     finally:
+        llm_module._analytics_llm_config = original_config
+
+
+def test_configure_analytics_llm_logs_startup_config(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original_config = llm_module._analytics_llm_config
+    stream = io.StringIO()
+    monkeypatch.setenv("LITELLM_MODEL", "groq/startup-model")
+    monkeypatch.setenv("ANALYTICS_SQL_REPAIR_RETRIES", "4")
+
+    sink_id = loguru_logger.add(stream, level="INFO", format="{message}")
+    try:
+        configure_analytics_llm()
+
+        assert (
+            "Analytics LLM config loaded model_id=groq/startup-model, "
+            "sql_repair_retries=4"
+        ) in stream.getvalue()
+    finally:
+        loguru_logger.remove(sink_id)
         llm_module._analytics_llm_config = original_config
 
 

@@ -1,5 +1,4 @@
-from __future__ import annotations
-
+from loguru import logger
 from dataclasses import dataclass
 
 from pydantic import Field, ValidationError, field_validator
@@ -86,6 +85,9 @@ def configure_analytics_llm() -> AnalyticsLLMConfig:
     """Load and cache the analytics LLM configuration during app startup."""
     global _analytics_llm_config
     _analytics_llm_config = get_analytics_llm_config()
+    logger.info(
+        f"Analytics LLM config loaded model_id={_analytics_llm_config.model_id}, sql_repair_retries={_analytics_llm_config.sql_repair_retries}",
+    )
     return _analytics_llm_config
 
 

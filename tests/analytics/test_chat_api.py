@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import logging
 
-import litellm
+from litellm.exceptions import APIConnectionError as LiteLLMAPIConnectionError
 import pytest
 from ninja.testing import TestClient
 
@@ -173,7 +173,9 @@ def test_chat_api_resolves_pending_clarification_from_next_reply(
     assert body.clarification is None
     assert PendingClarification.objects.count() == 0
 
-    assistant_turn = SlackTurn.objects.filter(role=SlackTurn.Role.ASSISTANT).latest("id")
+    assistant_turn = SlackTurn.objects.filter(role=SlackTurn.Role.ASSISTANT).latest(
+        "id"
+    )
     assert assistant_turn.metadata["response_type"] == "pending_clarification_resolved"
     assert assistant_turn.metadata["clarification_answer"] == "Use total revenue"
     assert assistant_turn.metadata["resolved_question"] == (
@@ -252,7 +254,9 @@ def test_chat_api_answers_with_agent_and_persists_sql_result(
             raw_agent_answer='{"message_text": "There are 2 apps."}',
         )
 
-    monkeypatch.setattr("analytics.chat_service.answer_question_with_agent", answer_with_agent)
+    monkeypatch.setattr(
+        "analytics.chat_service.answer_question_with_agent", answer_with_agent
+    )
 
     response = client.post(
         "/analytics/chat",
@@ -267,7 +271,10 @@ def test_chat_api_answers_with_agent_and_persists_sql_result(
     assistant_turn = SlackTurn.objects.get(role=SlackTurn.Role.ASSISTANT)
     assert assistant_turn.metadata["response_type"] == "agent_answered"
     assert assistant_turn.metadata["sql_visibility_preference"] == "requested"
-    assert assistant_turn.generated_sql.get().sql == "SELECT COUNT(*) AS app_count FROM apps"
+    assert (
+        assistant_turn.generated_sql.get().sql
+        == "SELECT COUNT(*) AS app_count FROM apps"
+    )
     assert assistant_turn.result_metadata.row_count == 1
     assert assistant_turn.result_metadata.columns == ["app_count"]
 
@@ -282,15 +289,17 @@ def test_chat_api_reraises_litellm_errors_without_persisting_assistant_turn(
     monkeypatch.setenv("LITELLM_MODEL", "groq/llama-3.1-8b-instant")
 
     def answer_with_agent(**kwargs: object) -> AgenticQAResult:
-        raise litellm.APIConnectionError(
+        raise LiteLLMAPIConnectionError(
             message="provider unavailable",
             llm_provider="groq",
             model="llama-3.1-8b-instant",
         )
 
-    monkeypatch.setattr("analytics.chat_service.answer_question_with_agent", answer_with_agent)
+    monkeypatch.setattr(
+        "analytics.chat_service.answer_question_with_agent", answer_with_agent
+    )
 
-    with pytest.raises(litellm.APIConnectionError):
+    with pytest.raises(LiteLLMAPIConnectionError):
         client.post("/analytics/chat", json=_payload())
 
     assert SlackConversation.objects.count() == 1
@@ -299,8 +308,7 @@ def test_chat_api_reraises_litellm_errors_without_persisting_assistant_turn(
         SlackTurn.Role.USER,
     ]
     assert not any(
-        turn.role == SlackTurn.Role.ASSISTANT
-        and "provider unavailable" in turn.text
+        turn.role == SlackTurn.Role.ASSISTANT and "provider unavailable" in turn.text
         for turn in conversation.turns.all()
     )
     assert "Analytics SQL agent LiteLLM failure" in caplog.text

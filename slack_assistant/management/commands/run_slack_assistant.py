@@ -56,7 +56,9 @@ def configure_slack_assistant_logging() -> None:
     logger.info("Slack assistant file logging configured path={}", log_path)
 
 
-def log_slack_event_received(surface: str, body: dict[str, Any], event: dict[str, Any]) -> None:
+def log_slack_event_received(
+    surface: str, body: dict[str, Any], event: dict[str, Any]
+) -> None:
     logger.info(
         "Received Slack {} event type={} subtype={} team={} channel={} channel_type={} "
         "thread={} ts={} user={} bot_id={} text_length={}",
@@ -244,7 +246,9 @@ def render_slack_table(columns: list[str], rows: list[dict[str, Any]]) -> str:
         max(len(column), *(len(row[index]) for row in values))
         for index, column in enumerate(columns)
     ]
-    header = " | ".join(column.ljust(widths[index]) for index, column in enumerate(columns))
+    header = " | ".join(
+        column.ljust(widths[index]) for index, column in enumerate(columns)
+    )
     divider = "-+-".join("-" * width for width in widths)
     body = [
         " | ".join(row[index].ljust(widths[index]) for index in range(len(columns)))
@@ -286,7 +290,9 @@ def post_chat_response(
         response.sql_snippet is not None,
     )
     result = client.chat_postMessage(**message_kwargs)
-    logger.info("Slack chat_postMessage completed result_type={}", type(result).__name__)
+    logger.info(
+        "Slack chat_postMessage completed result_type={}", type(result).__name__
+    )
 
     for snippet in (response.csv_snippet, response.sql_snippet):
         if snippet is not None:

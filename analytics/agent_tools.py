@@ -7,6 +7,7 @@ from decimal import Decimal
 import json
 from typing import Any
 
+from loguru import logger
 import sqlglot
 import sqlglot.errors
 from django.conf import settings
@@ -100,6 +101,7 @@ def run_readonly_sql(sql: str) -> dict[str, Any]:
             "hint": "Repair the SQL using this error and call run_readonly_sql again.",
         }
 
+    logger.info(f"SQL run {result['row_count']}")
     _record_sql_execution(
         SQLExecutionRecord(
             sql=normalized_sql,

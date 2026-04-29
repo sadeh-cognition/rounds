@@ -5,106 +5,200 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
-    dependencies = [
-    ]
+    dependencies = []
 
     operations = [
         migrations.CreateModel(
-            name='AnalyticsApp',
+            name="AnalyticsApp",
             fields=[
-                ('app_id', models.TextField(primary_key=True, serialize=False)),
-                ('name', models.TextField()),
-                ('platform', models.TextField()),
+                ("app_id", models.TextField(primary_key=True, serialize=False)),
+                ("name", models.TextField()),
+                ("platform", models.TextField()),
             ],
             options={
-                'db_table': 'apps',
-                'managed': False,
+                "db_table": "apps",
+                "managed": False,
             },
         ),
         migrations.CreateModel(
-            name='DailyMetric',
+            name="DailyMetric",
             fields=[
-                ('pk', models.CompositePrimaryKey('app', 'date', 'country', blank=True, editable=False, primary_key=True, serialize=False)),
-                ('date', models.DateField()),
-                ('country', models.CharField(max_length=2)),
-                ('installs', models.BigIntegerField()),
-                ('in_app_revenue', models.DecimalField(decimal_places=2, max_digits=12)),
-                ('ads_revenue', models.DecimalField(decimal_places=2, max_digits=12)),
-                ('ua_cost', models.DecimalField(decimal_places=2, max_digits=12)),
+                (
+                    "pk",
+                    models.CompositePrimaryKey(
+                        "app",
+                        "date",
+                        "country",
+                        blank=True,
+                        editable=False,
+                        primary_key=True,
+                        serialize=False,
+                    ),
+                ),
+                ("date", models.DateField()),
+                ("country", models.CharField(max_length=2)),
+                ("installs", models.BigIntegerField()),
+                (
+                    "in_app_revenue",
+                    models.DecimalField(decimal_places=2, max_digits=12),
+                ),
+                ("ads_revenue", models.DecimalField(decimal_places=2, max_digits=12)),
+                ("ua_cost", models.DecimalField(decimal_places=2, max_digits=12)),
             ],
             options={
-                'db_table': 'daily_metrics',
-                'managed': False,
+                "db_table": "daily_metrics",
+                "managed": False,
             },
         ),
         migrations.CreateModel(
-            name='SlackConversation',
+            name="SlackConversation",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('team_id', models.CharField(max_length=64)),
-                ('channel_id', models.CharField(max_length=64)),
-                ('thread_ts', models.CharField(max_length=64)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("team_id", models.CharField(max_length=64)),
+                ("channel_id", models.CharField(max_length=64)),
+                ("thread_ts", models.CharField(max_length=64)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
             ],
             options={
-                'constraints': [models.UniqueConstraint(fields=('team_id', 'channel_id', 'thread_ts'), name='unique_slack_conversation_thread')],
+                "constraints": [
+                    models.UniqueConstraint(
+                        fields=("team_id", "channel_id", "thread_ts"),
+                        name="unique_slack_conversation_thread",
+                    )
+                ],
             },
         ),
         migrations.CreateModel(
-            name='PendingClarification',
+            name="PendingClarification",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('question', models.TextField()),
-                ('context', models.JSONField(blank=True, default=dict)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('conversation', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='pending_clarification', to='analytics.slackconversation')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("question", models.TextField()),
+                ("context", models.JSONField(blank=True, default=dict)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "conversation",
+                    models.OneToOneField(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="pending_clarification",
+                        to="analytics.slackconversation",
+                    ),
+                ),
             ],
         ),
         migrations.CreateModel(
-            name='SlackTurn',
+            name="SlackTurn",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('role', models.CharField(choices=[('user', 'User'), ('assistant', 'Assistant')], max_length=16)),
-                ('slack_user_id', models.CharField(blank=True, max_length=64)),
-                ('slack_ts', models.CharField(blank=True, max_length=64)),
-                ('text', models.TextField()),
-                ('metadata', models.JSONField(blank=True, default=dict)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('conversation', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='turns', to='analytics.slackconversation')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                (
+                    "role",
+                    models.CharField(
+                        choices=[("user", "User"), ("assistant", "Assistant")],
+                        max_length=16,
+                    ),
+                ),
+                ("slack_user_id", models.CharField(blank=True, max_length=64)),
+                ("slack_ts", models.CharField(blank=True, max_length=64)),
+                ("text", models.TextField()),
+                ("metadata", models.JSONField(blank=True, default=dict)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "conversation",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="turns",
+                        to="analytics.slackconversation",
+                    ),
+                ),
             ],
         ),
         migrations.CreateModel(
-            name='GeneratedSQL',
+            name="GeneratedSQL",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('sql', models.TextField()),
-                ('validation_status', models.CharField(max_length=32)),
-                ('error', models.TextField(blank=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('turn', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='generated_sql', to='analytics.slackturn')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("sql", models.TextField()),
+                ("validation_status", models.CharField(max_length=32)),
+                ("error", models.TextField(blank=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "turn",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="generated_sql",
+                        to="analytics.slackturn",
+                    ),
+                ),
             ],
         ),
         migrations.CreateModel(
-            name='AnalyticsResultMetadata',
+            name="AnalyticsResultMetadata",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('row_count', models.PositiveIntegerField(default=0)),
-                ('returned_row_count', models.PositiveIntegerField(default=0)),
-                ('truncated', models.BooleanField(default=False)),
-                ('columns', models.JSONField(blank=True, default=list)),
-                ('csv_attachment_id', models.CharField(blank=True, max_length=128)),
-                ('sql_attachment_id', models.CharField(blank=True, max_length=128)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('turn', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='result_metadata', to='analytics.slackturn')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("row_count", models.PositiveIntegerField(default=0)),
+                ("returned_row_count", models.PositiveIntegerField(default=0)),
+                ("truncated", models.BooleanField(default=False)),
+                ("columns", models.JSONField(blank=True, default=list)),
+                ("csv_attachment_id", models.CharField(blank=True, max_length=128)),
+                ("sql_attachment_id", models.CharField(blank=True, max_length=128)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "turn",
+                    models.OneToOneField(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="result_metadata",
+                        to="analytics.slackturn",
+                    ),
+                ),
             ],
         ),
         migrations.AddIndex(
-            model_name='slackturn',
-            index=models.Index(fields=['conversation', 'created_at'], name='analytics_s_convers_2106a8_idx'),
+            model_name="slackturn",
+            index=models.Index(
+                fields=["conversation", "created_at"],
+                name="analytics_s_convers_2106a8_idx",
+            ),
         ),
     ]

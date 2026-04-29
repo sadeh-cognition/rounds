@@ -101,7 +101,10 @@ def test_is_direct_user_message_matches_app_messages_tab_events() -> None:
 
 
 def test_infer_sql_visibility_preference_from_user_text() -> None:
-    assert infer_sql_visibility_preference("Show me the SQL for this answer") == "requested"
+    assert (
+        infer_sql_visibility_preference("Show me the SQL for this answer")
+        == "requested"
+    )
     assert infer_sql_visibility_preference("Answer this without SQL") == "never"
     assert infer_sql_visibility_preference("How many apps do we have?") == "auto"
 
@@ -162,7 +165,10 @@ def test_post_chat_response_posts_message_and_uploads_snippets() -> None:
         }
     ]
     assert [upload["snippet_type"] for upload in client.uploads] == ["csv", "sql"]
-    assert [upload["filename"] for upload in client.uploads] == ["results.csv", "query.sql"]
+    assert [upload["filename"] for upload in client.uploads] == [
+        "results.csv",
+        "query.sql",
+    ]
 
 
 def test_post_chat_response_can_post_top_level_direct_message() -> None:
@@ -187,7 +193,9 @@ def test_post_chat_response_can_post_top_level_direct_message() -> None:
 
 
 def test_first_bolt_app_manifest_supports_assistant_command() -> None:
-    manifest_path = Path(__file__).resolve().parents[2] / "first-bolt-app" / "manifest.json"
+    manifest_path = (
+        Path(__file__).resolve().parents[2] / "first-bolt-app" / "manifest.json"
+    )
     manifest = json.loads(manifest_path.read_text())
 
     assert "assistant_view" in manifest["features"]
@@ -206,7 +214,12 @@ def test_first_bolt_app_manifest_supports_assistant_command() -> None:
 
 
 def test_first_bolt_app_slack_hooks_use_project_uv_environment() -> None:
-    hooks_path = Path(__file__).resolve().parents[2] / "first-bolt-app" / ".slack" / "hooks.json"
+    hooks_path = (
+        Path(__file__).resolve().parents[2] / "first-bolt-app" / ".slack" / "hooks.json"
+    )
     hooks = json.loads(hooks_path.read_text())
 
-    assert hooks["hooks"]["get-hooks"] == "uv run python -m slack_cli_hooks.hooks.get_hooks"
+    assert (
+        hooks["hooks"]["get-hooks"]
+        == "uv run python -m slack_cli_hooks.hooks.get_hooks"
+    )

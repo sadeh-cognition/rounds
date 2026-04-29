@@ -56,7 +56,7 @@ class PendingClarificationInline(admin.StackedInline):
     readonly_fields = ("created_at", "updated_at")
     can_delete = False
 
-    def has_add_permission(
+    def has_add_permission(  # type: ignore[override]
         self,
         request: HttpRequest,
         obj: SlackConversation | None,
@@ -99,7 +99,7 @@ class AnalyticsResultMetadataInline(admin.StackedInline):
     readonly_fields = ("created_at",)
     can_delete = False
 
-    def has_add_permission(self, request: HttpRequest, obj: SlackTurn | None) -> bool:
+    def has_add_permission(self, request: HttpRequest, obj: SlackTurn | None) -> bool:  # type: ignore[override]
         if obj is None:
             return False
         return not hasattr(obj, "result_metadata")

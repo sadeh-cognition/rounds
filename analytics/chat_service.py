@@ -330,6 +330,5 @@ def _resolve_pending_question(
     if not isinstance(ambiguous_term, str) or not ambiguous_term:
         return f"{original_text}\nClarification: {clarification_answer}"
     return (
-        f"{original_text}\n"
-        f"Clarification for {ambiguous_term}: {clarification_answer}"
+        f"{original_text}\nClarification for {ambiguous_term}: {clarification_answer}"
     )

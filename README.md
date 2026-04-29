@@ -100,7 +100,7 @@ LITELLM_MODEL=anthropic/claude-3-5-sonnet-20241022
 ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-If `LITELLM_MODEL` is missing or blank the application raises an `AnalyticsLLMConfigurationError` on startup.
+If `LITELLM_MODEL` is missing or blank application startup fails.
 
 # Objective
 
