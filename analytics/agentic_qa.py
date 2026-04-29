@@ -1,8 +1,8 @@
-from __future__ import annotations
-
 import json
 from dataclasses import dataclass
 from typing import Any
+
+from django.conf import settings
 
 from loguru import logger
 from pydantic import BaseModel, ValidationError
@@ -165,7 +165,7 @@ def _build_chat_response(
     return AnalyticsChatResponse(
         message_text=final_answer.message_text,
         table_columns=successful_execution.columns,
-        table_rows=successful_execution.rows[:25],
+        table_rows=successful_execution.rows[: settings.ANALYTICS_INLINE_ROW_LIMIT],
         sql_snippet=sql_snippet,
         row_count=successful_execution.row_count,
         returned_row_count=successful_execution.returned_row_count,

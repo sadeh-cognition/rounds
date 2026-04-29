@@ -11,7 +11,7 @@ from loguru import logger
 import sqlglot
 import sqlglot.errors
 from django.conf import settings
-from django.db import connection
+from django.db import connection, transaction
 from smolagents import tool
 from sqlglot import exp
 
@@ -29,6 +29,19 @@ class SQLExecutionRecord:
     returned_row_count: int
     truncated: bool
 
+
+DANGEROUS_FUNCTIONS = {
+    "PG_SLEEP",
+    "PG_SLEEP_FOR",
+    "PG_SLEEP_UNTIL",
+    "PG_READ_FILE",
+    "PG_READ_BINARY_FILE",
+    "PG_STAT_FILE",
+    "PG_LS_DIR",
+    "DBLINK",
+    "DBLINK_EXEC",
+    "SYSTEM",
+}
 
 _sql_execution_records: ContextVar[list[SQLExecutionRecord]] = ContextVar(
     "sql_execution_records",
@@ -144,6 +157,10 @@ def _validate_readonly_sql(sql: str) -> str:
     if not isinstance(expression, exp.Query):
         raise ValueError("Only SELECT or WITH read-only queries are allowed.")
 
+    for func in expression.find_all(exp.Func):
+        if hasattr(func, "name") and func.name and func.name.upper() in DANGEROUS_FUNCTIONS:
+            raise ValueError(f"SQL references forbidden function: {func.name}")
+
     cte_names = {
         cte.alias_or_name.lower()
         for cte in expression.find_all(exp.CTE)
@@ -173,10 +190,14 @@ def _validate_readonly_sql(sql: str) -> str:
 
 def _execute_readonly_sql(sql: str) -> dict[str, Any]:
     max_rows = settings.ANALYTICS_MAX_ROW_LIMIT
+    timeout_ms = getattr(settings, "ANALYTICS_SQL_STATEMENT_TIMEOUT_MS", 30000)
     count_sql = f"SELECT COUNT(*) FROM ({sql}) AS analytics_query_count"
     limited_sql = f"SELECT * FROM ({sql}) AS analytics_query LIMIT %s"
 
-    with connection.cursor() as cursor:
+    with transaction.atomic(), connection.cursor() as cursor:
+        cursor.execute(f"SET LOCAL statement_timeout = {timeout_ms}")
+        cursor.execute("SET LOCAL default_transaction_read_only = ON")
+
         cursor.execute(count_sql)
         count_row = cursor.fetchone()
         assert count_row is not None, "COUNT(*) query returned no rows"
