@@ -1,9 +1,14 @@
-from loguru import logger
-from dataclasses import dataclass
+from __future__ import annotations
 
-from pydantic import Field, ValidationError, field_validator
+from dataclasses import dataclass
+import json
+from typing import Any, Literal
+
+from loguru import logger
+
+from pydantic import BaseModel, Field, ValidationError, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from smolagents import LiteLLMModel, ToolCallingAgent
+from smolagents import LiteLLMModel, ToolCallingAgent, tool
 
 from analytics.agent_tools import get_schema_context, get_today_date, run_readonly_sql
 
@@ -60,6 +65,14 @@ class AnalyticsAgentRuntime:
     config: AnalyticsLLMConfig
 
 
+ResultPresentationFormat = Literal["plain_text", "detailed_table"]
+
+
+class ResultPresentationDecision(BaseModel):
+    presentation_format: ResultPresentationFormat
+    rationale: str = ""
+
+
 _analytics_llm_config: AnalyticsLLMConfig | None = None
 
 
@@ -106,6 +119,103 @@ def build_litellm_model(config: AnalyticsLLMConfig | None = None) -> LiteLLMMode
     return LiteLLMModel(model_id=resolved_config.model_id)
 
 
+@tool
+def decide_result_presentation(
+    question: str,
+    columns_json: str = "[]",
+    rows_json: str = "[]",
+    row_count: int = 0,
+) -> dict[str, str]:
+    """Decide whether analytics results should be plain text or a detailed table.
+
+    Args:
+        question: The user's analytics question.
+        columns_json: JSON array of result column names returned by SQL.
+        rows_json: JSON array of result rows returned by SQL, preferably limited to
+            a representative sample.
+        row_count: Total number of rows in the SQL result.
+    """
+    columns = _safe_json_list(columns_json)
+    rows = _safe_json_list(rows_json)
+    decision = _ask_result_presentation_model(
+        question=question,
+        columns=columns,
+        rows=rows,
+        row_count=row_count,
+    )
+    return decision.model_dump()
+
+
+def _ask_result_presentation_model(
+    *,
+    question: str,
+    columns: list[Any],
+    rows: list[Any],
+    row_count: int,
+) -> ResultPresentationDecision:
+    model = build_litellm_model()
+    message = model.generate(
+        [
+            {
+                "role": "system",
+                "content": (
+                    "You choose the best display format for analytics query results. "
+                    "Return JSON only. Use plain_text for scalar, single-row, or "
+                    "short results that are easier to read in prose. Use "
+                    "detailed_table for multi-row, grouped, ranked, comparative, "
+                    "or wide results where rows and columns matter."
+                ),
+            },
+            {
+                "role": "user",
+                "content": json.dumps(
+                    {
+                        "question": question,
+                        "columns": columns,
+                        "sample_rows": rows[:10],
+                        "row_count": row_count,
+                        "allowed_presentation_formats": [
+                            "plain_text",
+                            "detailed_table",
+                        ],
+                        "required_json_schema": {
+                            "presentation_format": "plain_text | detailed_table",
+                            "rationale": "Brief reason for the decision.",
+                        },
+                    },
+                    default=str,
+                ),
+            },
+        ],
+        response_format={"type": "json_object"},
+    )
+    return _parse_result_presentation_decision(message.content)
+
+
+def _parse_result_presentation_decision(raw_content: Any) -> ResultPresentationDecision:
+    if isinstance(raw_content, dict):
+        return ResultPresentationDecision.model_validate(raw_content)
+
+    if isinstance(raw_content, list):
+        raw_content = "".join(
+            str(part.get("text", part)) if isinstance(part, dict) else str(part)
+            for part in raw_content
+        )
+
+    parsed = json.loads(str(raw_content).strip())
+    return ResultPresentationDecision.model_validate(parsed)
+
+
+def _safe_json_list(raw_json: str) -> list[Any]:
+    try:
+        parsed = json.loads(raw_json)
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(parsed, list):
+        return []
+    return parsed
+
+
 def build_analytics_agent_runtime(
     config: AnalyticsLLMConfig | None = None,
     instructions: str | None = None,
@@ -114,7 +224,12 @@ def build_analytics_agent_runtime(
     resolved_config = config or get_configured_analytics_llm_config()
     model = build_litellm_model(resolved_config)
     agent = ToolCallingAgent(
-        tools=[get_schema_context, get_today_date, run_readonly_sql],
+        tools=[
+            get_schema_context,
+            get_today_date,
+            run_readonly_sql,
+            decide_result_presentation,
+        ],
         model=model,
         max_steps=10,
         instructions=instructions,

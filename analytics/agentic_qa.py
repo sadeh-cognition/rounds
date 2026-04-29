@@ -18,12 +18,17 @@ from analytics.chat_schemas import (
     AnalyticsSnippetPayload,
     SqlVisibilityPreference,
 )
-from analytics.llm import AnalyticsLLMConfig, build_analytics_agent_runtime
+from analytics.llm import (
+    AnalyticsLLMConfig,
+    ResultPresentationFormat,
+    build_analytics_agent_runtime,
+)
 from analytics.tracing import configure_phoenix_tracing
 
 
 class AgentFinalAnswer(BaseModel):
     message_text: str
+    result_presentation: ResultPresentationFormat = "detailed_table"
     needs_clarification: bool = False
     clarification_question: str = ""
 
@@ -37,10 +42,13 @@ class AgenticQAResult:
 
 AGENT_INSTRUCTIONS = """
 You answer Slack portfolio analytics questions by generating and executing SQL.
-Provide responses either in plain text or as detailed tables, depending on query complexity. 
-If the results are hard to read as plain text then format the results as plain text.
+Provide responses either in plain text or as detailed tables, depending on query complexity.
+After a successful run_readonly_sql call, call decide_result_presentation with the user question, result columns, result rows, and row count.
+Use the tool decision as result_presentation in the final answer.
+Use result_presentation=plain_text for scalar, single-row, or short results that are easier to read in prose.
+Use result_presentation=detailed_table for multi-row, grouped, ranked, comparative, or wide results where rows and columns matter.
 Table responses include clear descriptions and note any assumptions made.
-If the request is missing a necessary business definition, entity, date range, grouping, or comparison target, ask concise clarification questions instead of running SQL.
+If the request is missing a necessary business definition, entity, date range, grouping, comparison target, or other unstated detail, ask concise clarification questions instead of running SQL.
 Do not make assumptions or decisions for what a reasonable or default value should be. Instead ask for clarifications.
 If there are any ambiguities in the question, ask concise clarification questions to resolve them. Do not try to resolve such issues.
 Use only the given database schema, metric definitions, row limits, and conversation context.
@@ -51,7 +59,8 @@ If user provides a clarification and there are not more ambiguities or missing d
 If a date range is needed and not given by the user ask for clarification.
 Do not make assumptions about what a reasonable default date range would be. Always ask for clarification if a date range is needed and not provided.
 Return the final answer as JSON with exactly these keys:
-message_text, needs_clarification, clarification_question.
+message_text, result_presentation, needs_clarification, clarification_question.
+When asking for clarification, set needs_clarification=true.
 """
 
 
@@ -142,6 +151,15 @@ def _build_chat_response(
         return AnalyticsChatResponse(
             message_text=final_answer.message_text,
             sql_snippet=sql_snippet,
+        )
+
+    if final_answer.result_presentation == "plain_text":
+        return AnalyticsChatResponse(
+            message_text=final_answer.message_text,
+            sql_snippet=sql_snippet,
+            row_count=successful_execution.row_count,
+            returned_row_count=successful_execution.returned_row_count,
+            truncated=successful_execution.truncated,
         )
 
     return AnalyticsChatResponse(

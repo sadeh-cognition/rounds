@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+from types import SimpleNamespace
 
 from loguru import logger as loguru_logger
 import pytest
@@ -12,6 +13,7 @@ from analytics.llm import (
     build_analytics_agent_runtime,
     build_litellm_model,
     configure_analytics_llm,
+    decide_result_presentation,
     get_analytics_llm_config,
     get_configured_analytics_llm_config,
 )
@@ -120,4 +122,48 @@ def test_build_analytics_agent_runtime_uses_tool_calling_agent(
     assert runtime.config.model_id == "groq/llama-3.1-8b-instant"
     assert runtime.agent.model.model_id == "groq/llama-3.1-8b-instant"
     assert "get_schema_context" in runtime.agent.tools
+    assert "decide_result_presentation" in runtime.agent.tools
     assert runtime.agent.max_steps == 10
+
+
+def test_decide_result_presentation_uses_configured_litellm_model(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[dict[str, object]] = []
+
+    class FakeModel:
+        def generate(self, messages, response_format=None):
+            calls.append(
+                {
+                    "messages": messages,
+                    "response_format": response_format,
+                }
+            )
+            return SimpleNamespace(
+                content=(
+                    '{"presentation_format": "plain_text", '
+                    '"rationale": "Single scalar result."}'
+                )
+            )
+
+    monkeypatch.setattr(llm_module, "build_litellm_model", lambda: FakeModel())
+
+    decision = decide_result_presentation.forward(
+        question="How many apps are there?",
+        columns_json='["app_count"]',
+        rows_json='[{"app_count": 2}]',
+        row_count=1,
+    )
+
+    assert isinstance(calls, list)
+    assert isinstance(calls[0], dict)
+    assert isinstance(calls[0]["messages"], list)
+    assert isinstance(calls[0]["messages"][1], dict)
+    assert decision == {
+        "presentation_format": "plain_text",
+        "rationale": "Single scalar result.",
+    }
+    assert calls[0]["response_format"] == {"type": "json_object"}
+    assert (
+        '"question": "How many apps are there?"' in calls[0]["messages"][1]["content"]
+    )
